@@ -40,4 +40,9 @@ task launchRuneLite(type: JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'com.scaperplugin.ScaperPluginTest'
     jvmArgs = ['-ea']
+
+    // Forward Jagex Launcher arguments (passed via -Prl.args="...")
+    if (project.hasProperty('rl.args')) {
+        args project.property('rl.args').split(' ').toList()
+    }
 }

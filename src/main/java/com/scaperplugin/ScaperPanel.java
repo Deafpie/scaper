@@ -41,7 +41,7 @@ public class ScaperPanel extends PluginPanel
 		"Your OSRS account has been successfully linked to Discord via Scaper.";
 
 	private static final String DESCRIPTION_LOGGED_OUT =
-		"Log in to your OSRS account, or enter your RSN below to test manually.";
+		"Log in to your OSRS account to get started.";
 
 	private final Client client;
 	private final ScaperConfig config;
@@ -50,9 +50,6 @@ public class ScaperPanel extends PluginPanel
 	// UI components
 	private final JTextArea descriptionArea;
 	private final JLabel statusLabel;
-	private final JPanel manualRsnPanel;
-	private final JTextField rsnField;
-	private final JButton setRsnButton;
 	private final JPanel codePanel;
 	private final JLabel codeLabel;
 	private final JLabel timerLabel;
@@ -111,41 +108,6 @@ public class ScaperPanel extends PluginPanel
 		statusLabel.setBorder(new EmptyBorder(5, 0, 5, 0));
 		statusLabel.setVisible(false);
 		content.add(statusLabel);
-
-		// Manual RSN input panel (for testing without being logged in)
-		manualRsnPanel = new JPanel();
-		manualRsnPanel.setLayout(new BoxLayout(manualRsnPanel, BoxLayout.Y_AXIS));
-		manualRsnPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		manualRsnPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
-		manualRsnPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-		manualRsnPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 80));
-
-		JLabel rsnLabel = new JLabel("RuneScape Name:");
-		rsnLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
-		rsnLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		rsnLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-		manualRsnPanel.add(rsnLabel);
-		manualRsnPanel.add(Box.createVerticalStrut(4));
-
-		JPanel rsnRow = new JPanel(new BorderLayout(5, 0));
-		rsnRow.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		rsnRow.setAlignmentX(Component.LEFT_ALIGNMENT);
-		rsnRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
-
-		rsnField = new JTextField();
-		rsnField.setToolTipText("Enter your RSN to test without logging in");
-		rsnRow.add(rsnField, BorderLayout.CENTER);
-
-		setRsnButton = new JButton("Go");
-		setRsnButton.setPreferredSize(new Dimension(50, 28));
-		setRsnButton.setFocusPainted(false);
-		setRsnButton.addActionListener(e -> onManualRsn());
-		rsnRow.add(setRsnButton, BorderLayout.EAST);
-
-		manualRsnPanel.add(rsnRow);
-		manualRsnPanel.setVisible(false);
-		content.add(manualRsnPanel);
-		content.add(Box.createVerticalStrut(10));
 
 		// Code display panel
 		codePanel = new JPanel();
@@ -209,7 +171,6 @@ public class ScaperPanel extends PluginPanel
 		{
 			descriptionArea.setText(DESCRIPTION_LOGGED_OUT);
 			statusLabel.setVisible(false);
-			manualRsnPanel.setVisible(true);
 			codePanel.setVisible(false);
 			generateButton.setVisible(false);
 			unlinkButton.setVisible(false);
@@ -222,7 +183,6 @@ public class ScaperPanel extends PluginPanel
 		{
 			descriptionArea.setText(DESCRIPTION_NOT_LINKED);
 			statusLabel.setVisible(false);
-			manualRsnPanel.setVisible(false);
 			codePanel.setVisible(false);
 			generateButton.setText("Generate Code");
 			generateButton.setEnabled(true);
@@ -256,7 +216,6 @@ public class ScaperPanel extends PluginPanel
 			descriptionArea.setText(DESCRIPTION_LINKED);
 			statusLabel.setText("<html><font color='#00c853'>\u2713 Successfully Linked</font></html>");
 			statusLabel.setVisible(true);
-			manualRsnPanel.setVisible(false);
 			codePanel.setVisible(false);
 			generateButton.setVisible(false);
 			unlinkButton.setText("Unlink Account");
@@ -323,18 +282,6 @@ public class ScaperPanel extends PluginPanel
 	}
 
 	// ── Button actions ─────────────────────────────────────────────────────────
-
-	private void onManualRsn()
-	{
-		String rsn = rsnField.getText().trim();
-		if (rsn.isEmpty())
-		{
-			showError("Please enter your RuneScape name.");
-			return;
-		}
-		cachedRsn = rsn;
-		checkLinkStatus();
-	}
 
 	private void onGenerateCode()
 	{
