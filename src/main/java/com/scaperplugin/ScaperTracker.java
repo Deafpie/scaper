@@ -460,6 +460,17 @@ public class ScaperTracker
 	{
 		try
 		{
+			// Quest points from the client
+			try
+			{
+				int questPoints = client.getVarpValue(101); // Varp 101 = quest points
+				payload.addProperty("questPoints", questPoints);
+			}
+			catch (Exception e)
+			{
+				log.debug("Error reading quest points varp", e);
+			}
+
 			JsonArray quests = new JsonArray();
 			for (Quest quest : Quest.values())
 			{
