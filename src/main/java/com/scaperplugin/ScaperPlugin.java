@@ -5,7 +5,9 @@ import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
+import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
+import net.runelite.api.events.GameTick;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.plugins.Plugin;
@@ -39,11 +41,13 @@ public class ScaperPlugin extends Plugin
 
 	private ScaperPanel panel;
 	private NavigationButton navButton;
+	private ScaperTracker tracker;
 
 	@Override
 	protected void startUp()
 	{
 		panel = new ScaperPanel(client, config, httpClient);
+		tracker = new ScaperTracker(client, config, httpClient);
 
 		// Generate a simple "S" icon programmatically
 		BufferedImage icon = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
@@ -73,7 +77,20 @@ public class ScaperPlugin extends Plugin
 	{
 		clientToolbar.removeNavigation(navButton);
 		panel.shutdown();
+		tracker.reset();
 		log.info("Scaper plugin stopped");
+	}
+
+	@Subscribe
+	public void onGameTick(GameTick event)
+	{
+		tracker.onGameTick();
+	}
+
+	@Subscribe
+	public void onChatMessage(ChatMessage event)
+	{
+		tracker.onChatMessage(event);
 	}
 
 	@Subscribe
@@ -85,6 +102,7 @@ public class ScaperPlugin extends Plugin
 		}
 		else if (event.getGameState() == GameState.LOGIN_SCREEN)
 		{
+			tracker.reset();
 			panel.onLogout();
 		}
 	}

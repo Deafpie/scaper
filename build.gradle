@@ -17,6 +17,10 @@ dependencies {
 
     compileOnly 'org.projectlombok:lombok:1.18.30'
     annotationProcessor 'org.projectlombok:lombok:1.18.30'
+
+    // Test launcher — runs a full RuneLite client with this plugin loaded
+    testImplementation group: 'net.runelite', name: 'client', version: runeLiteVersion
+    testImplementation 'junit:junit:4.13.2'
 }
 
 group = 'com.scaperplugin'
@@ -27,4 +31,13 @@ targetCompatibility = '11'
 
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
+}
+
+// Test launcher — starts RuneLite with the plugin loaded for local testing
+task launchRuneLite(type: JavaExec) {
+    group = 'runelite'
+    description = 'Launch RuneLite with the Scaper plugin loaded'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.scaperplugin.ScaperPluginTest'
+    jvmArgs = ['-ea']
 }
