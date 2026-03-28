@@ -2,12 +2,19 @@ package com.scaperplugin;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.google.gson.JsonElement;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.clan.ClanChannel;
 import net.runelite.api.clan.ClanChannelMember;
 import net.runelite.api.clan.ClanMember;
+import net.runelite.api.clan.ClanRank;
 import net.runelite.api.clan.ClanSettings;
+import net.runelite.api.clan.ClanTitle;
+import net.runelite.api.FriendsChatManager;
+import net.runelite.api.FriendsChatMember;
+import net.runelite.api.FriendsChatRank;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.ChatMessage;
 import okhttp3.MediaType;
@@ -17,7 +24,9 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -40,6 +49,7 @@ import java.util.regex.Pattern;
  *   <li>HP, Prayer, Run energy, Weight</li>
  *   <li>Active pet/follower</li>
  *   <li>Friends list</li>
+ *   <li>Friends Chat info and rank</li>
  * </ul>
  *
  * <p>All client API calls happen on the client thread (via onGameTick).
@@ -74,7 +84,12 @@ public class ScaperTracker
 
 	// ── State ────────────────────────────────────────────────────────────────
 	private int tickCounter = 0;
+	private int outboundPollCounter = 0;
+	private static final int OUTBOUND_POLL_TICKS = 8; // ~5 seconds (8 * 0.6s)
 	private volatile String cachedRsn;
+
+	// Outbound chat queue — messages from Discord to type into clan chat
+	private final Queue<String> outboundChatQueue = new LinkedList<>();
 
 	// Event queues — populated on client thread, drained on snapshot send
 	private final List<JsonObject> pendingBossKills = new ArrayList<>();
@@ -135,6 +150,20 @@ public class ScaperTracker
 		{
 			tickCounter = 0;
 			collectAndSend();
+		}
+
+		// ── Outbound clan chat: poll API + type one message per tick ─────────
+		if (config.trackClanChat())
+		{
+			outboundPollCounter++;
+			if (outboundPollCounter >= OUTBOUND_POLL_TICKS)
+			{
+				outboundPollCounter = 0;
+				pollOutboundChat();
+			}
+
+			// Type one queued message per tick to avoid flooding
+			sendNextOutboundMessage();
 		}
 	}
 
@@ -274,6 +303,7 @@ public class ScaperTracker
 						location.addProperty("x", loc.getX());
 						location.addProperty("y", loc.getY());
 						location.addProperty("plane", loc.getPlane());
+						location.addProperty("regionId", loc.getRegionID());
 						payload.add("location", location);
 					}
 				}
@@ -318,6 +348,9 @@ public class ScaperTracker
 
 			// ── Friends list ──────────────────────────────────────────────
 			collectFriends(payload);
+
+			// ── Friends Chat info ─────────────────────────────────────────
+			collectFriendsChat(payload);
 
 			// ── Drain event queues ────────────────────────────────────────
 			drainEvents(payload);
@@ -414,7 +447,16 @@ public class ScaperTracker
 					if (member.getName() != null
 						&& member.getName().equalsIgnoreCase(cachedRsn))
 					{
-						clan.addProperty("myRank", String.valueOf(member.getRank()));
+						ClanRank rank = member.getRank();
+						clan.addProperty("myRankLevel", rank.getRank());
+
+						// Get the custom title for this rank (e.g. "General", "Captain")
+						ClanTitle title = clanSettings.titleForRank(rank);
+						if (title != null)
+						{
+							clan.addProperty("myRankTitle", title.getName());
+							clan.addProperty("myRankIconId", title.getId());
+						}
 						break;
 					}
 				}
@@ -546,6 +588,44 @@ public class ScaperTracker
 		}
 	}
 
+	private void collectFriendsChat(JsonObject payload)
+	{
+		try
+		{
+			FriendsChatManager fcManager = client.getFriendsChatManager();
+			if (fcManager == null) return;
+
+			JsonObject fc = new JsonObject();
+			fc.addProperty("name", fcManager.getName());
+			fc.addProperty("owner", fcManager.getOwner());
+			fc.addProperty("memberCount", fcManager.getCount());
+
+			// Find our own rank in the FC
+			FriendsChatMember[] members = fcManager.getMembers();
+			if (members != null)
+			{
+				for (FriendsChatMember member : members)
+				{
+					if (member == null) continue;
+					if (member.getName() != null
+						&& member.getName().equalsIgnoreCase(cachedRsn))
+					{
+						FriendsChatRank rank = member.getRank();
+						fc.addProperty("myRank", rank.getValue());
+						fc.addProperty("myRankName", rank.name());
+						break;
+					}
+				}
+			}
+
+			payload.add("friendsChat", fc);
+		}
+		catch (Exception e)
+		{
+			log.debug("Error collecting friends chat info", e);
+		}
+	}
+
 	// ═══════════════════════════════════════════════════════════════════════════
 	// Event queue draining
 	// ═══════════════════════════════════════════════════════════════════════════
@@ -644,11 +724,13 @@ public class ScaperTracker
 	public void reset()
 	{
 		tickCounter = 0;
+		outboundPollCounter = 0;
 		cachedRsn = null;
 		synchronized (pendingBossKills) { pendingBossKills.clear(); }
 		synchronized (pendingClanChat) { pendingClanChat.clear(); }
 		synchronized (pendingCollectionLog) { pendingCollectionLog.clear(); }
 		synchronized (pendingLootDrops) { pendingLootDrops.clear(); }
+		synchronized (outboundChatQueue) { outboundChatQueue.clear(); }
 	}
 
 	private String safeAccountType()
@@ -695,6 +777,97 @@ public class ScaperTracker
 		catch (NumberFormatException e)
 		{
 			return 0;
+		}
+	}
+
+	// ═════════════════════════════════════════════════════════════════════════════
+	// Outbound clan chat — Discord → OSRS
+	// ═════════════════════════════════════════════════════════════════════════════
+
+	/**
+	 * Poll the Scaper API for outbound clan chat messages (sent from Discord).
+	 * Runs asynchronously to avoid blocking the client thread.
+	 */
+	private void pollOutboundChat()
+	{
+		if (cachedRsn == null) return;
+
+		CompletableFuture.runAsync(() ->
+		{
+			try
+			{
+				String url = config.apiUrl().replaceAll("/+$", "")
+					+ "/api/clan-chat/outbound?rsn=" + java.net.URLEncoder.encode(cachedRsn, "UTF-8");
+				Request request = new Request.Builder()
+					.url(url)
+					.get()
+					.build();
+
+				try (Response response = httpClient.newCall(request).execute())
+				{
+					if (response.isSuccessful() && response.body() != null)
+					{
+						String body = response.body().string();
+						JsonElement parsed = new JsonParser().parse(body);
+						JsonArray arr = parsed.getAsJsonArray();
+						for (int i = 0; i < arr.size(); i++)
+						{
+							JsonObject msg = arr.get(i).getAsJsonObject();
+							String user = msg.get("discordUser").getAsString();
+							String text = msg.get("message").getAsString();
+							// Format: "/[DiscordUser]: message" — the "/" sends to clan chat
+							String formatted = "/[" + user + "]: " + text;
+							// Truncate to 80 chars (OSRS limit)
+							if (formatted.length() > 80)
+							{
+								formatted = formatted.substring(0, 77) + "...";
+							}
+							synchronized (outboundChatQueue)
+							{
+								outboundChatQueue.add(formatted);
+							}
+						}
+						if (arr.size() > 0)
+						{
+							log.info("Queued {} outbound clan chat messages from Discord", arr.size());
+						}
+					}
+				}
+			}
+			catch (Exception e)
+			{
+				log.debug("Failed to poll outbound chat: {}", e.getMessage());
+			}
+		});
+	}
+
+	/**
+	 * Send one queued outbound message into the clan chat.
+	 * Only sends one message per game tick to avoid detection / flooding.
+	 * Uses the RuneScape chatbox widget to type and send.
+	 */
+	private void sendNextOutboundMessage()
+	{
+		String message;
+		synchronized (outboundChatQueue)
+		{
+			message = outboundChatQueue.poll();
+		}
+		if (message == null) return;
+
+		try
+		{
+			// Use RuneScape's built-in chat mechanism:
+			// Set the typed text in the chatbox and trigger the send via widget script.
+			client.setVarcStrValue(VarClientStr.CHATBOX_TYPED_TEXT, message);
+			// Widget 162, child 55 is the chatbox input; script 96 processes Enter.
+			// We trigger the normal chat submission with the typed message.
+			client.runScript(96, 0, 0);
+			log.info("Sent outbound clan message: {}", message);
+		}
+		catch (Exception e)
+		{
+			log.warn("Failed to send outbound clan message: {}", e.getMessage());
 		}
 	}
 }
