@@ -96,4 +96,28 @@ public interface ScaperConfig extends Config
 	{
 		return true;
 	}
+
+	// ── Gnome Companion ────────────────────────────────────────────────────
+
+	@ConfigItem(
+		keyName = "gnomeCompanion",
+		name = "Gnome Companion",
+		description = "Summon an AI gnome that follows you and responds to its name in public chat",
+		position = 9
+	)
+	default boolean gnomeCompanion()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "gnomeName",
+		name = "Gnome Name",
+		description = "Custom name for your gnome companion (used as chat trigger and display name)",
+		position = 10
+	)
+	default String gnomeName()
+	{
+		return "Gnome";
+	}
 }

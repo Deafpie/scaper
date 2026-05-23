@@ -737,10 +737,8 @@ public class ScaperTracker
 	{
 		try
 		{
-			// Use reflection to avoid compile-time dependency on AccountType enum
-			java.lang.reflect.Method m = client.getClass().getMethod("getAccountType");
-			Object result = m.invoke(client);
-			return result != null ? result.toString() : "NORMAL";
+			net.runelite.api.vars.AccountType accountType = client.getAccountType();
+			return accountType != null ? accountType.name() : "NORMAL";
 		}
 		catch (Throwable e)
 		{
