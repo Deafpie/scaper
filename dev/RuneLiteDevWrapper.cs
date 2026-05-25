@@ -29,12 +29,13 @@ class RuneLiteDevWrapper
             gradleArgs = "launchRuneLite";
         }
 
+        // Must call cmd.exe /c to run a .bat file on Windows
         ProcessStartInfo psi = new ProcessStartInfo
         {
-            FileName = gradlew,
-            Arguments = gradleArgs,
+            FileName = "cmd.exe",
+            Arguments = string.Format("/c \"{0}\" {1}", gradlew, gradleArgs),
             WorkingDirectory = pluginDir,
-            UseShellExecute = false,
+            UseShellExecute = true,
         };
 
         try
@@ -46,7 +47,7 @@ class RuneLiteDevWrapper
         {
             // Log error to a file for debugging
             string logPath = Path.Combine(pluginDir, "wrapper_error.log");
-            File.WriteAllText(logPath, DateTime.Now + " — " + ex.ToString());
+            File.WriteAllText(logPath, DateTime.Now + " - " + ex.ToString());
         }
     }
 }

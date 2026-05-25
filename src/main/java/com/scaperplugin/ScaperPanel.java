@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit;
 public class ScaperPanel extends PluginPanel
 {
 	private static final MediaType JSON_TYPE = MediaType.parse("application/json; charset=utf-8");
+	private static final String API_URL = "https://scaper.icu";
 
 	private static final String DESCRIPTION_NOT_LINKED =
 		"Thank you for using Scaper!\n\n" +
@@ -44,7 +45,6 @@ public class ScaperPanel extends PluginPanel
 		"Log in to your OSRS account to get started.";
 
 	private final Client client;
-	private final ScaperConfig config;
 	private final OkHttpClient httpClient;
 
 	// UI components
@@ -63,11 +63,10 @@ public class ScaperPanel extends PluginPanel
 	private volatile String cachedRsn;
 	private volatile boolean linked;
 
-	public ScaperPanel(Client client, ScaperConfig config, OkHttpClient httpClient)
+	public ScaperPanel(Client client, OkHttpClient httpClient)
 	{
 		super(false);
 		this.client = client;
-		this.config = config;
 		this.httpClient = httpClient;
 
 		setLayout(new BorderLayout());
@@ -329,7 +328,7 @@ public class ScaperPanel extends PluginPanel
 		{
 			if (result == null)
 			{
-				showError("Could not connect to Scaper server. Check API URL in plugin settings.");
+				showError("Could not connect to Scaper server. Please try again later.");
 				return;
 			}
 
@@ -537,7 +536,6 @@ public class ScaperPanel extends PluginPanel
 
 	private String buildUrl(String path)
 	{
-		String base = config.apiUrl().replaceAll("/+$", "");
-		return base + path;
+		return API_URL + path;
 	}
 }

