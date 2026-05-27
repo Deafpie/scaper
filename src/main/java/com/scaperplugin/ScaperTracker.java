@@ -840,8 +840,8 @@ public class ScaperTracker
 							JsonObject msg = arr.get(i).getAsJsonObject();
 							String user = msg.get("discordUser").getAsString();
 							String text = msg.get("message").getAsString();
-							// Compliance-safe client display (no programmatic chatbox typing).
-							String formatted = "[Discord] [" + user + "]: " + text;
+							// Plugin-local clan-chat style display (no programmatic chatbox typing).
+							String formatted = "[" + user + "]: " + text;
 							formatted = truncate(formatted, MAX_OUTBOUND_DISPLAY_LENGTH);
 							synchronized (outboundChatQueue)
 							{
@@ -881,7 +881,7 @@ public class ScaperTracker
 
 		try
 		{
-			client.addChatMessage(ChatMessageType.GAMEMESSAGE, "Scaper", message, null);
+			client.addChatMessage(ChatMessageType.CLAN_CHAT, "Discord", message, null);
 			log.info("Displayed outbound Discord message: {}", message);
 		}
 		catch (Exception e)
