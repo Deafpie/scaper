@@ -34,6 +34,7 @@ import java.util.Map;
 public class ScaperPlugin extends Plugin
 {
         private static volatile int discordModIconIndex = -1;
+        private static final int DISCORD_CHAT_ICON_SIZE = 11;
 
         @Inject
         private Client client;
@@ -73,8 +74,15 @@ public class ScaperPlugin extends Plugin
                                 return -1;
                         }
 
-                        int width = img.getWidth();
-                        int height = img.getHeight();
+                        int width = DISCORD_CHAT_ICON_SIZE;
+                        int height = DISCORD_CHAT_ICON_SIZE;
+
+                        BufferedImage scaled = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+                        Graphics2D sg = scaled.createGraphics();
+                        sg.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                        sg.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+                        sg.drawImage(img, 0, 0, width, height, null);
+                        sg.dispose();
 
                         // RuneLite modicons are indexed sprites: palette index 0 is transparent.
                         Map<Integer, Integer> paletteIndexByRgb = new LinkedHashMap<>();
@@ -86,7 +94,7 @@ public class ScaperPlugin extends Plugin
                         {
                                 for (int x = 0; x < width; x++)
                                 {
-                                        int argb = img.getRGB(x, y);
+                                        int argb = scaled.getRGB(x, y);
                                         int alpha = (argb >>> 24) & 0xFF;
                                         int idx = y * width + x;
 

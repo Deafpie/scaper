@@ -908,7 +908,7 @@ public class ScaperTracker
 
 		try
 		{
-			client.addChatMessage(ChatMessageType.CLAN_CHAT, discordBridgeSenderDisplayName(), message, null);
+			client.addChatMessage(ChatMessageType.CLAN_MESSAGE, discordBridgeSenderDisplayName(), message, null);
 			log.info("Displayed outbound Discord message: {}", message);
 		}
 		catch (Exception e)
