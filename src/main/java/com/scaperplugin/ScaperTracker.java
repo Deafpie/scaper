@@ -89,6 +89,7 @@ public class ScaperTracker
 	private static final int OUTBOUND_POLL_TICKS = 8; // ~5 seconds (8 * 0.6s)
 	private static final int MAX_OUTBOUND_QUEUE = 25;
 	private static final int MAX_OUTBOUND_DISPLAY_LENGTH = 180;
+	private static final String DISCORD_BRIDGE_SENDER = "Discord";
 	private volatile String cachedRsn;
 
 	// Outbound chat queue — messages from Discord to type into clan chat
@@ -105,6 +106,13 @@ public class ScaperTracker
 		if (value == null) return "";
 		if (maxLength <= 0 || value.length() <= maxLength) return value;
 		return value.substring(0, Math.max(0, maxLength - 3)) + "...";
+	}
+
+	private static boolean isLocalDiscordBridgeEcho(String sender, String message)
+	{
+		if (sender == null || message == null) return false;
+		if (!DISCORD_BRIDGE_SENDER.equalsIgnoreCase(sender)) return false;
+		return message.startsWith("[") && message.contains("]: ");
 	}
 
 	public ScaperTracker(Client client, OkHttpClient httpClient)
@@ -189,9 +197,18 @@ public class ScaperTracker
 		// ── Clan chat ─────────────────────────────────────────────────────
 		if (type == ChatMessageType.CLAN_CHAT)
 		{
+			String sender = stripTags(event.getName());
+			String message = stripTags(event.getMessage());
+
+			// Avoid Discord -> plugin-local chat line -> API -> Discord echo loops.
+			if (isLocalDiscordBridgeEcho(sender, message))
+			{
+				return;
+			}
+
 			JsonObject msg = new JsonObject();
-			msg.addProperty("sender", stripTags(event.getName()));
-			msg.addProperty("message", stripTags(event.getMessage()));
+			msg.addProperty("sender", sender);
+			msg.addProperty("message", message);
 			msg.addProperty("timestamp", System.currentTimeMillis());
 			synchronized (pendingClanChat)
 			{
@@ -881,7 +898,7 @@ public class ScaperTracker
 
 		try
 		{
-			client.addChatMessage(ChatMessageType.CLAN_CHAT, "Discord", message, null);
+			client.addChatMessage(ChatMessageType.CLAN_CHAT, DISCORD_BRIDGE_SENDER, message, null);
 			log.info("Displayed outbound Discord message: {}", message);
 		}
 		catch (Exception e)
