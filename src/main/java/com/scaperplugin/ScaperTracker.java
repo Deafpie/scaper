@@ -436,6 +436,7 @@ public class ScaperTracker
 			if (members != null)
 			{
 				JsonArray memberNames = new JsonArray();
+				JsonObject memberRanks = new JsonObject();
 				for (ClanMember member : members)
 				{
 					if (member.getName() == null) continue;
@@ -443,21 +444,40 @@ public class ScaperTracker
 					// Capture all member names for cross-member verification
 					memberNames.add(member.getName());
 
-					if (member.getName().equalsIgnoreCase(cachedRsn))
+					ClanRank rank = member.getRank();
+					if (rank != null)
 					{
-						ClanRank rank = member.getRank();
-						clan.addProperty("myRankLevel", rank.getRank());
+						JsonObject rankData = new JsonObject();
+						rankData.addProperty("rankLevel", rank.getRank());
 
-						// Get the custom title for this rank (e.g. "General", "Captain")
 						ClanTitle title = clanSettings.titleForRank(rank);
 						if (title != null)
 						{
-							clan.addProperty("myRankTitle", title.getName());
-							clan.addProperty("myRankIconId", title.getId());
+							rankData.addProperty("rankTitle", title.getName());
+							rankData.addProperty("rankIconId", title.getId());
+						}
+
+						memberRanks.add(member.getName(), rankData);
+					}
+
+					if (member.getName().equalsIgnoreCase(cachedRsn))
+					{
+						if (rank != null)
+						{
+							clan.addProperty("myRankLevel", rank.getRank());
+
+							// Get the custom title for this rank (e.g. "General", "Captain")
+							ClanTitle title = clanSettings.titleForRank(rank);
+							if (title != null)
+							{
+								clan.addProperty("myRankTitle", title.getName());
+								clan.addProperty("myRankIconId", title.getId());
+							}
 						}
 					}
 				}
 				clan.add("memberNames", memberNames);
+				clan.add("memberRanks", memberRanks);
 				clan.addProperty("totalMembers", members.size());
 			}
 
