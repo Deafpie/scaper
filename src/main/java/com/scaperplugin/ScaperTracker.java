@@ -831,13 +831,8 @@ public class ScaperTracker
 							JsonObject msg = arr.get(i).getAsJsonObject();
 							String user = msg.get("discordUser").getAsString();
 							String text = msg.get("message").getAsString();
-							// Format: "/[DiscordUser]: message" — the "/" sends to clan chat
-							String formatted = "/[" + user + "]: " + text;
-							// Truncate to 80 chars (OSRS limit)
-							if (formatted.length() > 80)
-							{
-								formatted = formatted.substring(0, 77) + "...";
-							}
+							// Compliance-safe client display (no programmatic chatbox typing).
+							String formatted = "[Discord] [" + user + "]: " + text;
 							synchronized (outboundChatQueue)
 							{
 								outboundChatQueue.add(formatted);
@@ -858,9 +853,8 @@ public class ScaperTracker
 	}
 
 	/**
-	 * Send one queued outbound message into the clan chat.
-	 * Only sends one message per game tick to avoid detection / flooding.
-	 * Uses the RuneScape chatbox widget to type and send.
+	 * Display one queued outbound message in the local client chat.
+	 * This intentionally avoids programmatic chatbox typing for policy compliance.
 	 */
 	private void sendNextOutboundMessage()
 	{
@@ -873,17 +867,13 @@ public class ScaperTracker
 
 		try
 		{
-			// Use RuneScape's built-in chat mechanism:
-			// Set the typed text in the chatbox and trigger the send via widget script.
-			client.setVarcStrValue(VarClientStr.CHATBOX_TYPED_TEXT, message);
-			// Widget 162, child 55 is the chatbox input; script 96 processes Enter.
-			// We trigger the normal chat submission with the typed message.
-			client.runScript(96, 0, 0);
-			log.info("Sent outbound clan message: {}", message);
+			client.addChatMessage(ChatMessageType.GAMEMESSAGE, "Scaper", message, null);
+			client.refreshChat();
+			log.info("Displayed outbound Discord message: {}", message);
 		}
 		catch (Exception e)
 		{
-			log.warn("Failed to send outbound clan message: {}", e.getMessage());
+			log.warn("Failed to display outbound Discord message: {}", e.getMessage());
 		}
 	}
 }
