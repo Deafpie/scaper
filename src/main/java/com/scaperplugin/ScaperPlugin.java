@@ -34,7 +34,8 @@ import java.util.Map;
 public class ScaperPlugin extends Plugin
 {
         private static volatile int discordModIconIndex = -1;
-        private static final int DISCORD_CHAT_ICON_SIZE = 11;
+        private static final int DISCORD_CHAT_ICON_SIZE = 9;
+        private static final int DISCORD_CHAT_ICON_OFFSET_Y = 1;
 
         @Inject
         private Client client;
@@ -59,18 +60,18 @@ public class ScaperPlugin extends Plugin
 
         private int installDiscordModIcon()
         {
-                try (InputStream in = ScaperPlugin.class.getResourceAsStream("/discord_ingame.png"))
+                try (InputStream in = ScaperPlugin.class.getResourceAsStream("/discord_emoji.png"))
                 {
                         if (in == null)
                         {
-                                log.warn("discord_ingame.png resource not found");
+                                log.warn("discord_emoji.png resource not found");
                                 return -1;
                         }
 
                         BufferedImage img = ImageIO.read(in);
                         if (img == null)
                         {
-                                log.warn("Failed to decode discord_ingame.png resource");
+                                log.warn("Failed to decode discord_emoji.png resource");
                                 return -1;
                         }
 
@@ -140,7 +141,7 @@ public class ScaperPlugin extends Plugin
                         customIcon.setOriginalWidth(width);
                         customIcon.setOriginalHeight(height);
                         customIcon.setOffsetX(0);
-                        customIcon.setOffsetY(0);
+                        customIcon.setOffsetY(DISCORD_CHAT_ICON_OFFSET_Y);
                         customIcon.setPixels(pixels);
                         customIcon.setPalette(Arrays.copyOf(palette, palette.length));
 
@@ -189,10 +190,7 @@ public class ScaperPlugin extends Plugin
                         .build();
 
                 clientToolbar.addNavigation(navButton);
-                if (discordModIconIndex < 0)
-                {
-                        discordModIconIndex = installDiscordModIcon();
-                }
+                discordModIconIndex = installDiscordModIcon();
                 log.info("Scaper plugin started");
         }
 
@@ -222,14 +220,12 @@ public class ScaperPlugin extends Plugin
         {
                 if (event.getGameState() == GameState.LOGGED_IN)
                 {
-                        if (discordModIconIndex < 0)
-                        {
-                                discordModIconIndex = installDiscordModIcon();
-                        }
+                        discordModIconIndex = installDiscordModIcon();
                         panel.onLogin();
                 }
                 else if (event.getGameState() == GameState.LOGIN_SCREEN)
                 {
+                        discordModIconIndex = -1;
                         tracker.reset();
                         panel.onLogout();
                 }
