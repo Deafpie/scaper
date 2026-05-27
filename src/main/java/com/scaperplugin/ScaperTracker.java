@@ -87,6 +87,8 @@ public class ScaperTracker
 	private int tickCounter = 0;
 	private int outboundPollCounter = 0;
 	private static final int OUTBOUND_POLL_TICKS = 8; // ~5 seconds (8 * 0.6s)
+	private static final int MAX_OUTBOUND_QUEUE = 25;
+	private static final int MAX_OUTBOUND_DISPLAY_LENGTH = 180;
 	private volatile String cachedRsn;
 
 	// Outbound chat queue — messages from Discord to type into clan chat
@@ -97,6 +99,13 @@ public class ScaperTracker
 	private final List<JsonObject> pendingClanChat = new ArrayList<>();
 	private final List<JsonObject> pendingCollectionLog = new ArrayList<>();
 	private final List<JsonObject> pendingLootDrops = new ArrayList<>();
+
+	private static String truncate(String value, int maxLength)
+	{
+		if (value == null) return "";
+		if (maxLength <= 0 || value.length() <= maxLength) return value;
+		return value.substring(0, Math.max(0, maxLength - 3)) + "...";
+	}
 
 	public ScaperTracker(Client client, OkHttpClient httpClient)
 	{
@@ -833,8 +842,13 @@ public class ScaperTracker
 							String text = msg.get("message").getAsString();
 							// Compliance-safe client display (no programmatic chatbox typing).
 							String formatted = "[Discord] [" + user + "]: " + text;
+							formatted = truncate(formatted, MAX_OUTBOUND_DISPLAY_LENGTH);
 							synchronized (outboundChatQueue)
 							{
+								if (outboundChatQueue.size() >= MAX_OUTBOUND_QUEUE)
+								{
+									outboundChatQueue.poll();
+								}
 								outboundChatQueue.add(formatted);
 							}
 						}
@@ -868,7 +882,6 @@ public class ScaperTracker
 		try
 		{
 			client.addChatMessage(ChatMessageType.GAMEMESSAGE, "Scaper", message, null);
-			client.refreshChat();
 			log.info("Displayed outbound Discord message: {}", message);
 		}
 		catch (Exception e)
