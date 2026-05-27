@@ -115,6 +115,16 @@ public class ScaperTracker
 		return message.startsWith("[") && message.contains("]: ");
 	}
 
+	private static String discordBridgeSenderDisplayName()
+	{
+		int iconIdx = ScaperPlugin.getDiscordModIconIndex();
+		if (iconIdx >= 0)
+		{
+			return "<img=" + iconIdx + ">" + DISCORD_BRIDGE_SENDER;
+		}
+		return DISCORD_BRIDGE_SENDER;
+	}
+
 	public ScaperTracker(Client client, OkHttpClient httpClient)
 	{
 		this.client = client;
@@ -898,7 +908,7 @@ public class ScaperTracker
 
 		try
 		{
-			client.addChatMessage(ChatMessageType.CLAN_CHAT, DISCORD_BRIDGE_SENDER, message, null);
+			client.addChatMessage(ChatMessageType.CLAN_CHAT, discordBridgeSenderDisplayName(), message, null);
 			log.info("Displayed outbound Discord message: {}", message);
 		}
 		catch (Exception e)
