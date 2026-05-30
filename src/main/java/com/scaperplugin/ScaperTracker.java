@@ -518,6 +518,32 @@ public class ScaperTracker
 				clan.addProperty("totalMembers", members.size());
 			}
 
+			// Capture EVERY configured rank slot in the clan — including empty
+			// ones that have no assigned members. memberRanks only contains
+			// slots that are in use, so without this the bot can't show the
+			// clan's full rank ladder. ClanRank values span -1..127; we ask
+			// the clanSettings for the title at each and keep the non-null
+			// ones (those are the slots actually configured for this clan).
+			try
+			{
+				JsonArray clanTitles = new JsonArray();
+				for (int r = -1; r <= 127; r++)
+				{
+					ClanTitle t = clanSettings.titleForRank(new ClanRank(r));
+					if (t == null) continue;
+					JsonObject row = new JsonObject();
+					row.addProperty("rankLevel",  r);
+					row.addProperty("rankIconId", t.getId());
+					row.addProperty("rankTitle",  t.getName());
+					clanTitles.add(row);
+				}
+				if (clanTitles.size() > 0)
+				{
+					clan.add("clanTitles", clanTitles);
+				}
+			}
+			catch (Exception ignored) { /* older RL API */ }
+
 			// Use ClanChannel for online member count
 			ClanChannel channel = client.getClanChannel();
 			if (channel != null)
