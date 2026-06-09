@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit;
 public class ScaperPanel extends PluginPanel
 {
 	private static final MediaType JSON_TYPE = MediaType.parse("application/json; charset=utf-8");
-	private static final String API_URL = "https://scaper.icu";
+	private static final String API_URL = "https://api.scaper.icu";
 
 	private static final String DESCRIPTION_NOT_LINKED =
 		"Thank you for using Scaper!\n\n" +

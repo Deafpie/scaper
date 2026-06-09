@@ -191,6 +191,14 @@ public class ScaperPlugin extends Plugin
 
                 clientToolbar.addNavigation(navButton);
                 discordModIconIndex = installDiscordModIcon();
+
+                // If the player is already logged in when the plugin is first enabled,
+                // GameStateChanged won't fire — so trigger onLogin() manually.
+                if (client.getGameState() == GameState.LOGGED_IN)
+                {
+                        panel.onLogin();
+                }
+
                 log.info("Scaper plugin started");
         }
 

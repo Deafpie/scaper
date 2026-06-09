@@ -59,7 +59,7 @@ import java.util.regex.Pattern;
 public class ScaperTracker
 {
 	private static final MediaType JSON_TYPE = MediaType.parse("application/json; charset=utf-8");
-	private static final String API_URL = "https://scaper.icu";
+	private static final String API_URL = "https://api.scaper.icu";
 	private static final int TRACKING_INTERVAL_SECONDS = 30;
 
 	// ── Chat message patterns ────────────────────────────────────────────────
@@ -524,10 +524,11 @@ public class ScaperTracker
 			// clan's full rank ladder. ClanRank values span -1..127; we ask
 			// the clanSettings for the title at each and keep the non-null
 			// ones (those are the slots actually configured for this clan).
-			try
+			JsonArray clanTitles = new JsonArray();
+			int clanTitleErrors = 0;
+			for (int r = -1; r <= 127; r++)
 			{
-				JsonArray clanTitles = new JsonArray();
-				for (int r = -1; r <= 127; r++)
+				try
 				{
 					ClanTitle t = clanSettings.titleForRank(new ClanRank(r));
 					if (t == null) continue;
@@ -537,12 +538,27 @@ public class ScaperTracker
 					row.addProperty("rankTitle",  t.getName());
 					clanTitles.add(row);
 				}
-				if (clanTitles.size() > 0)
+				catch (Throwable ex)
 				{
-					clan.add("clanTitles", clanTitles);
+					clanTitleErrors++;
 				}
 			}
-			catch (Exception ignored) { /* older RL API */ }
+			clan.add("clanTitles", clanTitles);
+			log.info("Scaper: collected {} clanTitles ({} errors) for clan '{}'",
+				clanTitles.size(), clanTitleErrors, clan.has("name") ? clan.get("name").getAsString() : "?");
+			// One-time per-snapshot dump of the full title list so we can
+			// identify how the clan's actual configured ranks differ from
+			// Jagex's defaults.
+			StringBuilder dump = new StringBuilder("Scaper clanTitles dump: ");
+			for (int i = 0; i < clanTitles.size(); i++)
+			{
+				JsonObject row = clanTitles.get(i).getAsJsonObject();
+				dump.append("[lvl=").append(row.get("rankLevel").getAsInt())
+					.append(",icon=").append(row.get("rankIconId").getAsInt())
+					.append(",title=").append(row.get("rankTitle").getAsString())
+					.append("] ");
+			}
+			log.info(dump.toString());
 
 			// Use ClanChannel for online member count
 			ClanChannel channel = client.getClanChannel();
