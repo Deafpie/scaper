@@ -32,11 +32,12 @@ public class ScaperPanel extends PluginPanel
 
 	private static final String DESCRIPTION_NOT_LINKED =
 		"Thank you for using Scaper!\n\n" +
-		"If Scaper is in your clan's Discord already, you can use /link within " +
-		"the Discord using Scaper, followed by your unique code.\n\n" +
-		"Please press the button below to generate your code. Your code will " +
+		"Please press the button below to generate a code. Your code will " +
 		"expire after 5 minutes. If the code doesn't work, click the generate " +
-		"button again to get a new code.";
+		"button again to get a new code.\n\n" +
+		"You can link your OSRS account to your Discord account in one of two ways: " +
+		"log into Scaper.icu and click \"Dashboard\" to enter your code, or add the " +
+		"Scaper bot to your Discord server and use the /link command.";
 
 	private static final String DESCRIPTION_LINKED =
 		"Your OSRS account has been successfully linked to Discord via Scaper.";

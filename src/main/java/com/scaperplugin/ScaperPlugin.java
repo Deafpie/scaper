@@ -170,17 +170,41 @@ public class ScaperPlugin extends Plugin
                 panel = new ScaperPanel(client, httpClient);
                 tracker = new ScaperTracker(client, httpClient);
 
-                // Generate a simple "S" icon programmatically
-                BufferedImage icon = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
-                Graphics2D g = icon.createGraphics();
-                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g.setColor(new Color(0, 200, 83));
-                g.fillRoundRect(0, 0, 16, 16, 4, 4);
-                g.setColor(Color.WHITE);
-                g.setFont(new Font("Arial", Font.BOLD, 12));
-                FontMetrics fm = g.getFontMetrics();
-                g.drawString("S", (16 - fm.stringWidth("S")) / 2, 13);
-                g.dispose();
+                // Load the Scaper icon from resources
+                BufferedImage icon;
+                try (InputStream iconStream = ScaperPlugin.class.getResourceAsStream("/scaper_icon.png"))
+                {
+                        if (iconStream != null)
+                        {
+                                icon = ImageIO.read(iconStream);
+                        }
+                        else
+                        {
+                                // Fallback: draw a simple "S" icon
+                                icon = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+                                Graphics2D g = icon.createGraphics();
+                                g.setColor(new Color(0, 200, 83));
+                                g.fillRoundRect(0, 0, 16, 16, 4, 4);
+                                g.setColor(Color.WHITE);
+                                g.setFont(new Font("Arial", Font.BOLD, 12));
+                                FontMetrics fm = g.getFontMetrics();
+                                g.drawString("S", (16 - fm.stringWidth("S")) / 2, 13);
+                                g.dispose();
+                        }
+                }
+                catch (Exception e)
+                {
+                        log.warn("Failed to load scaper_icon.png, using fallback", e);
+                        icon = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+                        Graphics2D g = icon.createGraphics();
+                        g.setColor(new Color(0, 200, 83));
+                        g.fillRoundRect(0, 0, 16, 16, 4, 4);
+                        g.setColor(Color.WHITE);
+                        g.setFont(new Font("Arial", Font.BOLD, 12));
+                        FontMetrics fm = g.getFontMetrics();
+                        g.drawString("S", (16 - fm.stringWidth("S")) / 2, 13);
+                        g.dispose();
+                }
 
                 navButton = NavigationButton.builder()
                         .tooltip("Scaper")
