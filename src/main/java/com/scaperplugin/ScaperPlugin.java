@@ -11,11 +11,18 @@ import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.hiscore.HiscoreClient;
+import net.runelite.client.hiscore.HiscoreEndpoint;
+import net.runelite.client.hiscore.HiscoreResult;
+import net.runelite.client.hiscore.HiscoreSkill;
+import net.runelite.client.hiscore.HiscoreSkillType;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import okhttp3.OkHttpClient;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
@@ -49,9 +56,16 @@ public class ScaperPlugin extends Plugin
         @Inject
         private OkHttpClient httpClient;
 
-        private ScaperPanel panel;
-        private NavigationButton navButton;
-        private ScaperTracker tracker;
+	@Inject
+	private HiscoreClient hiscoreClient;
+
+	private ScaperPanel panel;
+	private NavigationButton navButton;
+	private ScaperTracker tracker;
+
+	// How often to refresh hiscore boss KC (~5 minutes at 0.6s/tick)
+	private static final int HISCORE_REFRESH_TICKS = 500;
+	private int hiscoreFetchTicks = 0;
 
         public static int getDiscordModIconIndex()
         {
@@ -239,6 +253,12 @@ public class ScaperPlugin extends Plugin
         public void onGameTick(GameTick event)
         {
                 tracker.onGameTick();
+                hiscoreFetchTicks++;
+                if (hiscoreFetchTicks >= HISCORE_REFRESH_TICKS)
+                {
+                        hiscoreFetchTicks = 0;
+                        fetchBossKcAsync();
+                }
         }
 
         @Subscribe
@@ -254,6 +274,7 @@ public class ScaperPlugin extends Plugin
                 {
                         discordModIconIndex = installDiscordModIcon();
                         panel.onLogin();
+                        hiscoreFetchTicks = HISCORE_REFRESH_TICKS; // trigger fetch on next tick
                 }
                 else if (event.getGameState() == GameState.LOGIN_SCREEN)
                 {
@@ -261,6 +282,37 @@ public class ScaperPlugin extends Plugin
                         tracker.reset();
                         panel.onLogout();
                 }
+        }
+
+        private void fetchBossKcAsync()
+        {
+                String rsn = tracker.getRsn();
+                if (rsn == null) return;
+                java.util.concurrent.CompletableFuture.runAsync(() ->
+                {
+                        try
+                        {
+                                HiscoreResult result = hiscoreClient.lookup(rsn, HiscoreEndpoint.NORMAL);
+                                if (result == null) return;
+                                JsonArray bossKc = new JsonArray();
+                                for (HiscoreSkill skill : HiscoreSkill.values())
+                                {
+                                        if (skill.getType() != HiscoreSkillType.BOSS) continue;
+                                        var hs = result.getSkill(skill);
+                                        if (hs == null || hs.getLevel() < 0) continue;
+                                        JsonObject entry = new JsonObject();
+                                        entry.addProperty("boss", skill.getName());
+                                        entry.addProperty("kc", hs.getLevel());
+                                        bossKc.add(entry);
+                                }
+                                tracker.setBossKcCache(bossKc);
+                                log.debug("Scaper: fetched hiscore boss KC ({} entries) for {}", bossKc.size(), rsn);
+                        }
+                        catch (Exception e)
+                        {
+                                log.debug("Scaper: failed to fetch hiscore boss KC for {}: {}", rsn, e.getMessage());
+                        }
+                });
         }
 
         @Provides

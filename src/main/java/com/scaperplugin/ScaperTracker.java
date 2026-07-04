@@ -101,6 +101,9 @@ public class ScaperTracker
 	private final List<JsonObject> pendingCollectionLog = new ArrayList<>();
 	private final List<JsonObject> pendingLootDrops = new ArrayList<>();
 
+	// Cached boss KC totals from hiscores — refreshed by ScaperPlugin periodically
+	private volatile JsonArray cachedBossKc = null;
+
 	private static String truncate(String value, int maxLength)
 	{
 		if (value == null) return "";
@@ -140,6 +143,11 @@ public class ScaperTracker
 	public String getRsn()
 	{
 		return cachedRsn;
+	}
+
+	public void setBossKcCache(JsonArray arr)
+	{
+		this.cachedBossKc = arr;
 	}
 
 	// ═══════════════════════════════════════════════════════════════════════════
@@ -384,6 +392,13 @@ public class ScaperTracker
 
 			// ── Drain event queues ────────────────────────────────────────
 			drainEvents(payload);
+
+			// ── Boss KC totals from hiscores (cached) ─────────────────────
+			JsonArray bossKcSnapshot = cachedBossKc;
+			if (bossKcSnapshot != null)
+			{
+				payload.add("bossKcTotals", bossKcSnapshot);
+			}
 
 			// ── Send asynchronously ───────────────────────────────────────
 			sendPayload(payload);
@@ -823,6 +838,7 @@ public class ScaperTracker
 		tickCounter = 0;
 		outboundPollCounter = 0;
 		cachedRsn = null;
+		cachedBossKc = null;
 		synchronized (pendingBossKills) { pendingBossKills.clear(); }
 		synchronized (pendingClanChat) { pendingClanChat.clear(); }
 		synchronized (pendingCollectionLog) { pendingCollectionLog.clear(); }
