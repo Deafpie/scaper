@@ -290,34 +290,43 @@ public class ScaperPlugin extends Plugin
                 if (rsn == null) return;
                 java.util.concurrent.CompletableFuture.runAsync(() ->
                 {
-                        try
-                        {
-                                HiscoreResult result = hiscoreClient.lookup(rsn, HiscoreEndpoint.NORMAL);
-                                if (result == null) return;
-                                JsonArray bossKc = new JsonArray();
-                                for (HiscoreSkill skill : HiscoreSkill.values())
-                                {
-                                        if (skill.getType() != HiscoreSkillType.BOSS) continue;
-                                        var hs = result.getSkill(skill);
-                                        if (hs == null || hs.getLevel() < 0) continue;
-                                        JsonObject entry = new JsonObject();
-                                        entry.addProperty("boss", skill.getName());
-                                        entry.addProperty("kc", hs.getLevel());
-                                        bossKc.add(entry);
-                                }
-                                tracker.setBossKcCache(bossKc);
-                                log.debug("Scaper: fetched hiscore boss KC ({} entries) for {}", bossKc.size(), rsn);
-                        }
-                        catch (Exception e)
-                        {
-                                log.debug("Scaper: failed to fetch hiscore boss KC for {}: {}", rsn, e.getMessage());
-                        }
-                });
-        }
-
-        @Provides
-        ScaperConfig provideConfig(ConfigManager configManager)
-        {
+			// Try multiple hiscore endpoints — account type may vary
+			HiscoreEndpoint[] endpoints = {
+				HiscoreEndpoint.NORMAL,
+				HiscoreEndpoint.IRONMAN,
+				HiscoreEndpoint.HARDCORE_IRONMAN,
+				HiscoreEndpoint.ULTIMATE_IRONMAN,
+			};
+			for (HiscoreEndpoint endpoint : endpoints)
+			{
+				try
+				{
+					HiscoreResult result = hiscoreClient.lookup(rsn, endpoint);
+					if (result == null) continue;
+					JsonArray bossKc = new JsonArray();
+					for (HiscoreSkill skill : HiscoreSkill.values())
+					{
+						if (skill.getType() != HiscoreSkillType.BOSS) continue;
+						var hs = result.getSkill(skill);
+						if (hs == null || hs.getLevel() < 0) continue;
+						JsonObject entry = new JsonObject();
+						entry.addProperty("boss", skill.getName());
+						entry.addProperty("kc", hs.getLevel());
+						bossKc.add(entry);
+					}
+					if (bossKc.size() > 0)
+					{
+						tracker.setBossKcCache(bossKc);
+						log.info("Scaper: fetched hiscore boss KC ({} entries) for {} via {}", bossKc.size(), rsn, endpoint);
+						return;
+					}
+				}
+				catch (Exception e)
+				{
+					log.debug("Scaper: hiscore lookup failed for {} via {}: {}", rsn, endpoint, e.getMessage());
+				}
+			}
+			log.warn("Scaper: could not fetch boss KC from any hiscore endpoint for {}", rsn);
                 return configManager.getConfig(ScaperConfig.class);
         }
 }
