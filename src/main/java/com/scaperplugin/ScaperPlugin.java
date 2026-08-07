@@ -16,16 +16,20 @@ import net.runelite.client.hiscore.HiscoreEndpoint;
 import net.runelite.client.hiscore.HiscoreResult;
 import net.runelite.client.hiscore.HiscoreSkill;
 import net.runelite.client.hiscore.HiscoreSkillType;
+import net.runelite.client.input.MouseListener;
+import net.runelite.client.input.MouseManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
+import net.runelite.client.ui.overlay.OverlayManager;
 import okhttp3.OkHttpClient;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
+import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.io.InputStream;
 import java.util.Arrays;
@@ -38,7 +42,7 @@ import java.util.Map;
         description = "Link your OSRS account to your clan's Discord server via Scaper bot",
         tags = {"clan", "discord", "link", "scaper"}
 )
-public class ScaperPlugin extends Plugin
+public class ScaperPlugin extends Plugin implements MouseListener
 {
         private static volatile int discordModIconIndex = -1;
         private static final int DISCORD_CHAT_ICON_SIZE = 9;
@@ -59,9 +63,16 @@ public class ScaperPlugin extends Plugin
 	@Inject
 	private HiscoreClient hiscoreClient;
 
+	@Inject
+	private OverlayManager overlayManager;
+
+	@Inject
+	private MouseManager mouseManager;
+
 	private ScaperPanel panel;
 	private NavigationButton navButton;
 	private ScaperTracker tracker;
+	private CaseOpenOverlay caseOpenOverlay;
 
 	// How often to refresh hiscore boss KC (~5 minutes at 0.6s/tick)
 	private static final int HISCORE_REFRESH_TICKS = 500;
@@ -181,7 +192,8 @@ public class ScaperPlugin extends Plugin
         @Override
         protected void startUp()
         {
-                panel = new ScaperPanel(client, httpClient);
+                caseOpenOverlay = new CaseOpenOverlay(client, httpClient);
+                panel = new ScaperPanel(client, httpClient, this);
                 tracker = new ScaperTracker(client, httpClient);
 
                 // Load the Scaper icon from resources
@@ -228,6 +240,8 @@ public class ScaperPlugin extends Plugin
                         .build();
 
                 clientToolbar.addNavigation(navButton);
+                overlayManager.add(caseOpenOverlay);
+                mouseManager.registerMouseListener(this);
                 discordModIconIndex = installDiscordModIcon();
 
                 // If the player is already logged in when the plugin is first enabled,
@@ -244,6 +258,8 @@ public class ScaperPlugin extends Plugin
         protected void shutDown()
         {
                 clientToolbar.removeNavigation(navButton);
+                overlayManager.remove(caseOpenOverlay);
+                mouseManager.unregisterMouseListener(this);
                 panel.shutdown();
                 tracker.reset();
                 log.info("Scaper plugin stopped");
@@ -327,6 +343,59 @@ public class ScaperPlugin extends Plugin
 				}
 			}
 			log.warn("Scaper: could not fetch boss KC from any hiscore endpoint for {}", rsn);
+                });
+        }
+
+        @Provides
+        ScaperConfig provideConfig(ConfigManager configManager)
+        {
                 return configManager.getConfig(ScaperConfig.class);
         }
+
+        // ── Case opening trigger (called from panel) ─────────────────────────────
+
+        public void openCase(String caseId, String caseName, String caseImageUrl, String caseOpenImageUrl)
+        {
+                if (caseOpenOverlay.isActive()) return;
+                caseOpenOverlay.startCaseOpen(caseId, caseName, caseImageUrl, caseOpenImageUrl);
+        }
+
+        // ── MouseListener implementation ─────────────────────────────────────────
+
+        @Override
+        public MouseEvent mouseClicked(MouseEvent e)
+        {
+                if (caseOpenOverlay.isActive())
+                {
+                        caseOpenOverlay.handleMouseClick(e);
+                        e.consume();
+                }
+                return e;
+        }
+
+        @Override
+        public MouseEvent mousePressed(MouseEvent e)
+        {
+                if (caseOpenOverlay.isActive()) e.consume();
+                return e;
+        }
+
+        @Override
+        public MouseEvent mouseReleased(MouseEvent e)
+        {
+                if (caseOpenOverlay.isActive()) e.consume();
+                return e;
+        }
+
+        @Override
+        public MouseEvent mouseEntered(MouseEvent e) { return e; }
+
+        @Override
+        public MouseEvent mouseExited(MouseEvent e) { return e; }
+
+        @Override
+        public MouseEvent mouseDragged(MouseEvent e) { return e; }
+
+        @Override
+        public MouseEvent mouseMoved(MouseEvent e) { return e; }
 }

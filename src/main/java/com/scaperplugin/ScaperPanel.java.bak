@@ -1,0 +1,1356 @@
+package com.scaperplugin;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.Client;
+import net.runelite.client.ui.ColorScheme;
+import net.runelite.client.ui.FontManager;
+import net.runelite.client.ui.PluginPanel;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import java.awt.*;
+import java.net.URLEncoder;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+
+@Slf4j
+public class ScaperPanel extends PluginPanel
+{
+	private static final MediaType JSON_TYPE = MediaType.parse("application/json; charset=utf-8");
+	private static final String API_URL = "https://api.scaper.icu";
+	private static final Color GOLD = new Color(212, 160, 23);
+	private static final Color TAB_BG = new Color(30, 30, 30);
+	private static final Color TAB_ACTIVE_BG = new Color(50, 45, 35);
+
+	private static final String DESCRIPTION_NOT_LINKED =
+		"Thank you for using Scaper!\n\n" +
+		"Please press the button below to generate a code. Your code will " +
+		"expire after 5 minutes. If the code doesn't work, click the generate " +
+		"button again to get a new code.\n\n" +
+		"You can link your OSRS account to your Discord account in one of two ways: " +
+		"log into Scaper.icu and click \"Dashboard\" to enter your code, or add the " +
+		"Scaper bot to your Discord server and use the /link command.";
+
+	private static final String DESCRIPTION_LINKED =
+		"Your OSRS account has been successfully linked to Discord via Scaper.";
+
+	private static final String DESCRIPTION_LOGGED_OUT =
+		"Log in to your OSRS account to get started.";
+
+	private final Client client;
+	private final OkHttpClient httpClient;
+	private final ScaperPlugin plugin;
+
+	// Tab buttons
+	private JButton dashboardTab;
+	private JButton marketTab;
+	private JButton settingsTab;
+	private String activeTab = "dashboard";
+
+	// Card layout for tab content
+	private CardLayout cardLayout;
+	private JPanel cardPanel;
+
+	// Dashboard tab components
+	private JLabel tokenLabel;
+	private JPanel tasksPanel;
+	private JLabel dashboardMessageLabel;
+
+	// Market tab components
+	private JPanel marketPanel;
+	private JLabel marketMessageLabel;
+
+	// Settings tab components
+	private JTextArea settingsDescriptionArea;
+	private JLabel settingsStatusLabel;
+	private JPanel codePanel;
+	private JLabel codeLabel;
+	private JLabel timerLabel;
+	private JButton generateButton;
+	private JButton unlinkButton;
+
+	// State
+	private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+	private ScheduledFuture<?> countdownFuture;
+	private ScheduledFuture<?> pollFuture;
+	private volatile String cachedRsn;
+	private volatile boolean linked;
+	private volatile boolean loggedIn;
+
+	public ScaperPanel(Client client, OkHttpClient httpClient, ScaperPlugin plugin)
+	{
+		super(false);
+		this.client = client;
+		this.httpClient = httpClient;
+		this.plugin = plugin;
+
+		setLayout(new BorderLayout());
+		setBackground(ColorScheme.DARK_GRAY_COLOR);
+
+		// ── Top section: title + tabs ──
+		JPanel topPanel = new JPanel();
+		topPanel.setLayout(new BoxLayout(topPanel, BoxLayout.Y_AXIS));
+		topPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+
+		JLabel title = new JLabel("Scaper");
+		title.setFont(FontManager.getRunescapeBoldFont().deriveFont(24f));
+		title.setForeground(Color.WHITE);
+		title.setHorizontalAlignment(SwingConstants.CENTER);
+		title.setAlignmentX(Component.CENTER_ALIGNMENT);
+		title.setBorder(new EmptyBorder(10, 10, 8, 10));
+		topPanel.add(title);
+
+		topPanel.add(buildTabBar());
+
+		add(topPanel, BorderLayout.NORTH);
+
+		// ── Card panel for tab content ──
+		cardLayout = new CardLayout();
+		cardPanel = new JPanel(cardLayout);
+		cardPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+
+		cardPanel.add(buildDashboardPanel(), "dashboard");
+		cardPanel.add(buildMarketPanel(), "market");
+		cardPanel.add(buildSettingsPanel(), "settings");
+
+		add(cardPanel, BorderLayout.CENTER);
+
+		// ── Bottom: Inventory button ──
+		JPanel bottomPanel = new JPanel(new BorderLayout());
+		bottomPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		bottomPanel.setBorder(new EmptyBorder(6, 10, 10, 10));
+
+		JButton inventoryButton = new JButton("Inventory");
+		inventoryButton.setFont(FontManager.getRunescapeBoldFont().deriveFont(14f));
+		inventoryButton.setBackground(GOLD);
+		inventoryButton.setForeground(Color.BLACK);
+		inventoryButton.setFocusPainted(false);
+		inventoryButton.setPreferredSize(new Dimension(0, 36));
+		inventoryButton.addActionListener(e -> onInventoryClicked());
+		bottomPanel.add(inventoryButton, BorderLayout.CENTER);
+
+		add(bottomPanel, BorderLayout.SOUTH);
+
+		// Start in logged-out state
+		showLoggedOut();
+	}
+
+	// ── Tab bar construction ───────────────────────────────────────────────────
+
+	private JPanel buildTabBar()
+	{
+		JPanel tabBar = new JPanel(new GridLayout(1, 3, 0, 0));
+		tabBar.setBackground(TAB_BG);
+		tabBar.setMaximumSize(new Dimension(Integer.MAX_VALUE, 32));
+		tabBar.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+		dashboardTab = createTabButton("Dashboard");
+		marketTab = createTabButton("Market");
+		settingsTab = createTabButton("Settings");
+
+		dashboardTab.addActionListener(e -> switchTab("dashboard"));
+		marketTab.addActionListener(e -> switchTab("market"));
+		settingsTab.addActionListener(e -> switchTab("settings"));
+
+		tabBar.add(dashboardTab);
+		tabBar.add(marketTab);
+		tabBar.add(settingsTab);
+
+		return tabBar;
+	}
+
+	private JButton createTabButton(String text)
+	{
+		JButton btn = new JButton(text);
+		btn.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+		btn.setFocusPainted(false);
+		btn.setBorderPainted(false);
+		btn.setBackground(TAB_BG);
+		btn.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+		return btn;
+	}
+
+	private void switchTab(String tab)
+	{
+		activeTab = tab;
+		cardLayout.show(cardPanel, tab);
+		updateTabStyles();
+
+		if (loggedIn)
+		{
+			if ("dashboard".equals(tab))
+			{
+				loadDashboard();
+			}
+			else if ("market".equals(tab))
+			{
+				loadMarketCases();
+			}
+		}
+	}
+
+	private void updateTabStyles()
+	{
+		styleTab(dashboardTab, "dashboard".equals(activeTab));
+		styleTab(marketTab, "market".equals(activeTab));
+		styleTab(settingsTab, "settings".equals(activeTab));
+	}
+
+	private void styleTab(JButton tab, boolean active)
+	{
+		if (active)
+		{
+			tab.setBackground(TAB_ACTIVE_BG);
+			tab.setForeground(GOLD);
+			tab.setBorder(BorderFactory.createMatteBorder(0, 0, 2, 0, GOLD));
+		}
+		else
+		{
+			tab.setBackground(TAB_BG);
+			tab.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+			tab.setBorder(BorderFactory.createEmptyBorder(0, 0, 2, 0));
+		}
+	}
+
+	// ── Dashboard panel ────────────────────────────────────────────────────────
+
+	private JPanel buildDashboardPanel()
+	{
+		JPanel panel = new JPanel();
+		panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+		panel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		panel.setBorder(new EmptyBorder(10, 10, 10, 10));
+
+		// Token balance row
+		JPanel tokenRow = new JPanel(new BorderLayout());
+		tokenRow.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		tokenRow.setBorder(new EmptyBorder(10, 12, 10, 12));
+		tokenRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
+		tokenRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+		JLabel tokenTitle = new JLabel("Tokens");
+		tokenTitle.setFont(FontManager.getRunescapeBoldFont().deriveFont(14f));
+		tokenTitle.setForeground(GOLD);
+		tokenRow.add(tokenTitle, BorderLayout.WEST);
+
+		tokenLabel = new JLabel("0");
+		tokenLabel.setFont(FontManager.getRunescapeBoldFont().deriveFont(14f));
+		tokenLabel.setForeground(Color.WHITE);
+		tokenLabel.setHorizontalAlignment(SwingConstants.RIGHT);
+		tokenRow.add(tokenLabel, BorderLayout.EAST);
+
+		panel.add(tokenRow);
+		panel.add(Box.createVerticalStrut(10));
+
+		// Dashboard message (shown when logged out or not linked)
+		dashboardMessageLabel = new JLabel();
+		dashboardMessageLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+		dashboardMessageLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		dashboardMessageLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+		dashboardMessageLabel.setVisible(false);
+		panel.add(dashboardMessageLabel);
+		panel.add(Box.createVerticalStrut(6));
+
+		// Daily tasks header
+		JLabel tasksHeader = new JLabel("Daily Tasks");
+		tasksHeader.setFont(FontManager.getRunescapeBoldFont().deriveFont(14f));
+		tasksHeader.setForeground(Color.WHITE);
+		tasksHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
+		panel.add(tasksHeader);
+		panel.add(Box.createVerticalStrut(6));
+
+		// Tasks list
+		tasksPanel = new JPanel();
+		tasksPanel.setLayout(new BoxLayout(tasksPanel, BoxLayout.Y_AXIS));
+		tasksPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		tasksPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+		panel.add(tasksPanel);
+
+		// Filler
+		panel.add(Box.createVerticalGlue());
+
+		return panel;
+	}
+
+	// ── Market panel ───────────────────────────────────────────────────────────
+
+	private JPanel buildMarketPanel()
+	{
+		JPanel panel = new JPanel();
+		panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+		panel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		panel.setBorder(new EmptyBorder(10, 10, 10, 10));
+
+		marketMessageLabel = new JLabel();
+		marketMessageLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+		marketMessageLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		marketMessageLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+		marketMessageLabel.setVisible(false);
+		panel.add(marketMessageLabel);
+
+		marketPanel = new JPanel();
+		marketPanel.setLayout(new BoxLayout(marketPanel, BoxLayout.Y_AXIS));
+		marketPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		marketPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+		panel.add(marketPanel);
+
+		panel.add(Box.createVerticalGlue());
+
+		return panel;
+	}
+
+	// ── Settings panel ─────────────────────────────────────────────────────────
+
+	private JPanel buildSettingsPanel()
+	{
+		JPanel panel = new JPanel();
+		panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+		panel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		panel.setBorder(new EmptyBorder(10, 10, 10, 10));
+
+		// Description text
+		settingsDescriptionArea = new JTextArea();
+		settingsDescriptionArea.setWrapStyleWord(true);
+		settingsDescriptionArea.setLineWrap(true);
+		settingsDescriptionArea.setEditable(false);
+		settingsDescriptionArea.setFocusable(false);
+		settingsDescriptionArea.setOpaque(false);
+		settingsDescriptionArea.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		settingsDescriptionArea.setFont(FontManager.getRunescapeSmallFont().deriveFont(14f));
+		settingsDescriptionArea.setAlignmentX(Component.LEFT_ALIGNMENT);
+		settingsDescriptionArea.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+		panel.add(settingsDescriptionArea);
+		panel.add(Box.createVerticalStrut(10));
+
+		// Status label
+		settingsStatusLabel = new JLabel();
+		settingsStatusLabel.setFont(FontManager.getRunescapeBoldFont().deriveFont(16f));
+		settingsStatusLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+		settingsStatusLabel.setBorder(new EmptyBorder(5, 0, 5, 0));
+		settingsStatusLabel.setVisible(false);
+		panel.add(settingsStatusLabel);
+
+		// Code display panel
+		codePanel = new JPanel();
+		codePanel.setLayout(new BoxLayout(codePanel, BoxLayout.Y_AXIS));
+		codePanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		codePanel.setBorder(new EmptyBorder(15, 10, 15, 10));
+		codePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+		codePanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 90));
+
+		codeLabel = new JLabel();
+		codeLabel.setFont(FontManager.getRunescapeBoldFont().deriveFont(30f));
+		codeLabel.setForeground(new Color(0, 200, 83));
+		codeLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+		codePanel.add(codeLabel);
+
+		codePanel.add(Box.createVerticalStrut(4));
+
+		timerLabel = new JLabel();
+		timerLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+		timerLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		timerLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+		codePanel.add(timerLabel);
+
+		codePanel.setVisible(false);
+		panel.add(codePanel);
+		panel.add(Box.createVerticalStrut(10));
+
+		// Generate Code button
+		generateButton = new JButton("Generate Code");
+		generateButton.setAlignmentX(Component.LEFT_ALIGNMENT);
+		generateButton.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
+		generateButton.setFocusPainted(false);
+		generateButton.addActionListener(e -> onGenerateCode());
+		generateButton.setVisible(false);
+		panel.add(generateButton);
+
+		panel.add(Box.createVerticalStrut(6));
+
+		// Unlink Account button
+		unlinkButton = new JButton("Unlink Account");
+		unlinkButton.setAlignmentX(Component.LEFT_ALIGNMENT);
+		unlinkButton.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
+		unlinkButton.setFocusPainted(false);
+		unlinkButton.setBackground(new Color(180, 60, 60));
+		unlinkButton.setForeground(Color.WHITE);
+		unlinkButton.addActionListener(e -> onUnlink());
+		unlinkButton.setVisible(false);
+		panel.add(unlinkButton);
+
+		panel.add(Box.createVerticalGlue());
+
+		return panel;
+	}
+
+	// ── State transitions ──────────────────────────────────────────────────────
+
+	private void showLoggedOut()
+	{
+		loggedIn = false;
+		SwingUtilities.invokeLater(() ->
+		{
+			// Dashboard
+			tokenLabel.setText("0");
+			dashboardMessageLabel.setText(
+				"<html>" + DESCRIPTION_LOGGED_OUT + "</html>");
+			dashboardMessageLabel.setVisible(true);
+			tasksPanel.removeAll();
+			tasksPanel.revalidate();
+			tasksPanel.repaint();
+
+			// Market
+			marketMessageLabel.setText(
+				"<html>" + DESCRIPTION_LOGGED_OUT + "</html>");
+			marketMessageLabel.setVisible(true);
+			marketPanel.removeAll();
+			marketPanel.revalidate();
+			marketPanel.repaint();
+
+			// Settings
+			settingsDescriptionArea.setText(DESCRIPTION_LOGGED_OUT);
+			settingsStatusLabel.setVisible(false);
+			codePanel.setVisible(false);
+			generateButton.setVisible(false);
+			unlinkButton.setVisible(false);
+
+			updateTabStyles();
+		});
+	}
+
+	private void showNotLinked()
+	{
+		SwingUtilities.invokeLater(() ->
+		{
+			// Dashboard
+			tokenLabel.setText("0");
+			dashboardMessageLabel.setText(
+				"<html>Link your Discord account in Settings to earn tokens</html>");
+			dashboardMessageLabel.setVisible(true);
+			tasksPanel.removeAll();
+			tasksPanel.revalidate();
+			tasksPanel.repaint();
+
+			// Market
+			marketMessageLabel.setVisible(false);
+			loadMarketCases();
+
+			// Settings
+			settingsDescriptionArea.setText(DESCRIPTION_NOT_LINKED);
+			settingsStatusLabel.setVisible(false);
+			codePanel.setVisible(false);
+			generateButton.setText("Generate Code");
+			generateButton.setEnabled(true);
+			generateButton.setVisible(true);
+			unlinkButton.setVisible(false);
+		});
+	}
+
+	private void showCodeGenerated(String code, long expiresAtMs)
+	{
+		SwingUtilities.invokeLater(() ->
+		{
+			settingsDescriptionArea.setText(DESCRIPTION_NOT_LINKED);
+			settingsStatusLabel.setVisible(false);
+			codeLabel.setText(code);
+			codePanel.setVisible(true);
+			generateButton.setText("Generate New Code");
+			generateButton.setEnabled(true);
+			generateButton.setVisible(true);
+			unlinkButton.setVisible(false);
+
+			startCountdown(expiresAtMs);
+			startPolling();
+		});
+	}
+
+	private void showLinked()
+	{
+		SwingUtilities.invokeLater(() ->
+		{
+			// Dashboard
+			dashboardMessageLabel.setVisible(false);
+
+			// Settings
+			settingsDescriptionArea.setText(DESCRIPTION_LINKED);
+			settingsStatusLabel.setText(
+				"<html><font color='#00c853'>\u2713 Successfully Linked</font></html>");
+			settingsStatusLabel.setVisible(true);
+			codePanel.setVisible(false);
+			generateButton.setVisible(false);
+			unlinkButton.setText("Unlink Account");
+			unlinkButton.setEnabled(true);
+			unlinkButton.setVisible(true);
+
+			// Market
+			marketMessageLabel.setVisible(false);
+
+			stopCountdown();
+			stopPolling();
+		});
+
+		loadDashboard();
+		loadMarketCases();
+	}
+
+	private void showError(String message)
+	{
+		SwingUtilities.invokeLater(() ->
+		{
+			settingsStatusLabel.setText(
+				"<html><font color='#ff5252'>" + message + "</font></html>");
+			settingsStatusLabel.setVisible(true);
+			generateButton.setEnabled(true);
+		});
+	}
+
+	// ── Lifecycle events ───────────────────────────────────────────────────────
+
+	public void onLogin()
+	{
+		loggedIn = true;
+
+		if (client.getLocalPlayer() != null)
+		{
+			cachedRsn = client.getLocalPlayer().getName();
+		}
+
+		if (cachedRsn == null)
+		{
+			scheduler.schedule(() ->
+			{
+				if (client.getLocalPlayer() != null)
+				{
+					cachedRsn = client.getLocalPlayer().getName();
+				}
+				checkLinkStatus();
+			}, 2, TimeUnit.SECONDS);
+		}
+		else
+		{
+			checkLinkStatus();
+		}
+	}
+
+	public void onLogout()
+	{
+		cachedRsn = null;
+		linked = false;
+		stopCountdown();
+		stopPolling();
+		showLoggedOut();
+	}
+
+	public void shutdown()
+	{
+		stopCountdown();
+		stopPolling();
+		scheduler.shutdownNow();
+	}
+
+	// ── Button actions ─────────────────────────────────────────────────────────
+
+	private void onGenerateCode()
+	{
+		String rsn = cachedRsn;
+		if (rsn == null)
+		{
+			showError("Could not detect your player name. Please try again.");
+			return;
+		}
+
+		generateButton.setEnabled(false);
+		generateButton.setText("Generating...");
+		settingsStatusLabel.setVisible(false);
+
+		CompletableFuture.supplyAsync(() ->
+		{
+			try
+			{
+				String url = buildUrl("/api/generate-code");
+				JsonObject body = new JsonObject();
+				body.addProperty("rsn", rsn);
+
+				Request request = new Request.Builder()
+					.url(url)
+					.post(RequestBody.create(JSON_TYPE, body.toString()))
+					.build();
+
+				try (Response response = httpClient.newCall(request).execute())
+				{
+					if (!response.isSuccessful())
+					{
+						throw new RuntimeException("Server returned " + response.code());
+					}
+					String respBody = response.body().string();
+					JsonElement parsed = new JsonParser().parse(respBody);
+					return parsed.getAsJsonObject();
+				}
+			}
+			catch (Exception e)
+			{
+				log.error("Failed to generate code", e);
+				return (JsonObject) null;
+			}
+		}).thenAccept(result ->
+		{
+			if (result == null)
+			{
+				showError("Could not connect to Scaper server. Please try again later.");
+				return;
+			}
+
+			String code = result.get("code").getAsString();
+			long expiresAt = result.get("expiresAt").getAsLong();
+			showCodeGenerated(code, expiresAt);
+		});
+	}
+
+	private void onUnlink()
+	{
+		String rsn = cachedRsn;
+		if (rsn == null)
+		{
+			return;
+		}
+
+		unlinkButton.setEnabled(false);
+		unlinkButton.setText("Unlinking...");
+
+		CompletableFuture.supplyAsync(() ->
+		{
+			try
+			{
+				String url = buildUrl("/api/unlink");
+				JsonObject body = new JsonObject();
+				body.addProperty("rsn", rsn);
+
+				Request request = new Request.Builder()
+					.url(url)
+					.post(RequestBody.create(JSON_TYPE, body.toString()))
+					.build();
+
+				try (Response response = httpClient.newCall(request).execute())
+				{
+					return response.isSuccessful();
+				}
+			}
+			catch (Exception e)
+			{
+				log.error("Failed to unlink account", e);
+				return false;
+			}
+		}).thenAccept(success ->
+		{
+			if (success)
+			{
+				linked = false;
+				showNotLinked();
+			}
+			else
+			{
+				SwingUtilities.invokeLater(() ->
+				{
+					unlinkButton.setEnabled(true);
+					unlinkButton.setText("Unlink Account");
+				});
+				showError("Failed to unlink. Please try again.");
+			}
+		});
+	}
+
+	// ── Link status check ──────────────────────────────────────────────────────
+
+	private void checkLinkStatus()
+	{
+		String rsn = cachedRsn;
+		if (rsn == null)
+		{
+			showNotLinked();
+			return;
+		}
+
+		CompletableFuture.supplyAsync(() ->
+		{
+			try
+			{
+				String url = buildUrl("/api/link-status?rsn=" + URLEncoder.encode(rsn, "UTF-8"));
+				Request request = new Request.Builder().url(url).get().build();
+
+				try (Response response = httpClient.newCall(request).execute())
+				{
+					if (!response.isSuccessful())
+					{
+						return (JsonObject) null;
+					}
+					JsonElement parsed = new JsonParser().parse(response.body().string());
+					return parsed.getAsJsonObject();
+				}
+			}
+			catch (Exception e)
+			{
+				log.warn("Could not check link status", e);
+				return (JsonObject) null;
+			}
+		}).thenAccept(result ->
+		{
+			if (result != null && result.has("linked") && result.get("linked").getAsBoolean())
+			{
+				linked = true;
+				showLinked();
+			}
+			else
+			{
+				linked = false;
+				showNotLinked();
+			}
+		});
+	}
+
+	private void pollLinkStatus()
+	{
+		String rsn = cachedRsn;
+		if (rsn == null || linked)
+		{
+			return;
+		}
+
+		try
+		{
+			String url = buildUrl("/api/link-status?rsn=" + URLEncoder.encode(rsn, "UTF-8"));
+			Request request = new Request.Builder().url(url).get().build();
+
+			try (Response response = httpClient.newCall(request).execute())
+			{
+				if (!response.isSuccessful())
+				{
+					return;
+				}
+
+				JsonElement parsed = new JsonParser().parse(response.body().string());
+				JsonObject result = parsed.getAsJsonObject();
+				if (result.has("linked") && result.get("linked").getAsBoolean())
+				{
+					linked = true;
+					showLinked();
+				}
+			}
+		}
+		catch (Exception e)
+		{
+			// Silently ignore polling errors
+		}
+	}
+
+	// ── Timer helpers ──────────────────────────────────────────────────────────
+
+	private void startCountdown(long expiresAtMs)
+	{
+		stopCountdown();
+		countdownFuture = scheduler.scheduleAtFixedRate(() ->
+		{
+			long remaining = expiresAtMs - System.currentTimeMillis();
+			if (remaining <= 0)
+			{
+				SwingUtilities.invokeLater(() ->
+				{
+					timerLabel.setText("Code expired");
+					timerLabel.setForeground(new Color(255, 82, 82));
+				});
+				stopCountdown();
+				return;
+			}
+
+			long minutes = remaining / 60000;
+			long seconds = (remaining % 60000) / 1000;
+			SwingUtilities.invokeLater(() ->
+			{
+				timerLabel.setText(String.format("Expires in %d:%02d", minutes, seconds));
+				timerLabel.setForeground(remaining < 60000
+					? new Color(255, 167, 38)
+					: ColorScheme.LIGHT_GRAY_COLOR);
+			});
+		}, 0, 1, TimeUnit.SECONDS);
+	}
+
+	private void stopCountdown()
+	{
+		if (countdownFuture != null)
+		{
+			countdownFuture.cancel(false);
+			countdownFuture = null;
+		}
+	}
+
+	private void startPolling()
+	{
+		stopPolling();
+		pollFuture = scheduler.scheduleAtFixedRate(this::pollLinkStatus, 5, 5, TimeUnit.SECONDS);
+	}
+
+	private void stopPolling()
+	{
+		if (pollFuture != null)
+		{
+			pollFuture.cancel(false);
+			pollFuture = null;
+		}
+	}
+
+	// ── Dashboard loading ──────────────────────────────────────────────────────
+
+	private void loadDashboard()
+	{
+		String rsn = cachedRsn;
+		if (rsn == null) return;
+
+		CompletableFuture.runAsync(() ->
+		{
+			try
+			{
+				String url = buildUrl("/api/plugin/dashboard?rsn=" + URLEncoder.encode(rsn, "UTF-8"));
+				Request request = new Request.Builder().url(url).get().build();
+
+				try (Response response = httpClient.newCall(request).execute())
+				{
+					if (!response.isSuccessful()) return;
+					String body = response.body() != null ? response.body().string() : "";
+					JsonObject data = new JsonParser().parse(body).getAsJsonObject();
+
+					int tokens = data.has("tokens") ? data.get("tokens").getAsInt() : 0;
+					boolean isLinked = data.has("linked") && data.get("linked").getAsBoolean();
+					JsonArray tasks = data.has("tasks") ? data.getAsJsonArray("tasks") : null;
+
+					SwingUtilities.invokeLater(() ->
+					{
+						tokenLabel.setText(String.format("%,d", tokens));
+
+						if (!isLinked)
+						{
+							dashboardMessageLabel.setText(
+								"<html>Link your Discord account in Settings to earn tokens</html>");
+							dashboardMessageLabel.setVisible(true);
+						}
+						else
+						{
+							dashboardMessageLabel.setVisible(false);
+						}
+
+						tasksPanel.removeAll();
+						if (tasks != null && tasks.size() > 0)
+						{
+							for (JsonElement el : tasks)
+							{
+								JsonObject task = el.getAsJsonObject();
+								String name = task.has("name") ? task.get("name").getAsString() : "Task";
+								String progress = task.has("progress") ? task.get("progress").getAsString() : "";
+								boolean completed = task.has("completed") && task.get("completed").getAsBoolean();
+
+								JPanel taskRow = new JPanel(new BorderLayout());
+								taskRow.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+								taskRow.setBorder(new EmptyBorder(8, 10, 8, 10));
+								taskRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
+								taskRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+								JLabel taskName = new JLabel(completed ? "\u2713 " + name : name);
+								taskName.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+								taskName.setForeground(completed ? new Color(0, 200, 83) : Color.WHITE);
+								taskRow.add(taskName, BorderLayout.CENTER);
+
+								if (!progress.isEmpty())
+								{
+									JLabel progressLabel = new JLabel(progress);
+									progressLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(11f));
+									progressLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+									taskRow.add(progressLabel, BorderLayout.EAST);
+								}
+
+								tasksPanel.add(taskRow);
+								tasksPanel.add(Box.createVerticalStrut(4));
+							}
+						}
+						else
+						{
+							JLabel noTasks = new JLabel("No daily tasks available");
+							noTasks.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+							noTasks.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+							noTasks.setAlignmentX(Component.LEFT_ALIGNMENT);
+							tasksPanel.add(noTasks);
+						}
+						tasksPanel.revalidate();
+						tasksPanel.repaint();
+					});
+				}
+			}
+			catch (Exception e)
+			{
+				log.warn("Failed to load dashboard", e);
+			}
+		});
+	}
+
+	// ── Market loading ─────────────────────────────────────────────────────────
+
+	private void loadMarketCases()
+	{
+		CompletableFuture.runAsync(() ->
+		{
+			try
+			{
+				String url = buildUrl("/api/market/cases");
+				Request request = new Request.Builder().url(url).get().build();
+
+				try (Response response = httpClient.newCall(request).execute())
+				{
+					if (!response.isSuccessful()) return;
+					String body = response.body() != null ? response.body().string() : "";
+					JsonObject data = new JsonParser().parse(body).getAsJsonObject();
+					JsonArray cases = data.getAsJsonArray("cases");
+
+					SwingUtilities.invokeLater(() ->
+					{
+						marketPanel.removeAll();
+						marketMessageLabel.setVisible(false);
+
+						if (cases == null || cases.size() == 0)
+						{
+							marketMessageLabel.setText(
+								"<html>No cases available right now</html>");
+							marketMessageLabel.setVisible(true);
+						}
+						else
+						{
+							for (JsonElement el : cases)
+							{
+								JsonObject c = el.getAsJsonObject();
+								String id = c.has("id") ? c.get("id").getAsString() : "";
+								String name = c.has("name") ? c.get("name").getAsString() : "Case";
+								int price = c.has("price") ? c.get("price").getAsInt() : 0;
+								String imgUrl = c.has("image") && !c.get("image").isJsonNull()
+									? c.get("image").getAsString() : "";
+								String openImgUrl = c.has("imageOpen") && !c.get("imageOpen").isJsonNull()
+									? c.get("imageOpen").getAsString() : imgUrl;
+
+								JPanel card = new JPanel(new BorderLayout(8, 0));
+								card.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+								card.setBorder(new EmptyBorder(10, 10, 10, 10));
+								card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 70));
+								card.setAlignmentX(Component.LEFT_ALIGNMENT);
+								card.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+								// Left: case info
+								JPanel infoPanel = new JPanel();
+								infoPanel.setLayout(new BoxLayout(infoPanel, BoxLayout.Y_AXIS));
+								infoPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+
+								JLabel nameLabel = new JLabel(name);
+								nameLabel.setFont(FontManager.getRunescapeBoldFont().deriveFont(13f));
+								nameLabel.setForeground(Color.WHITE);
+								nameLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+								infoPanel.add(nameLabel);
+
+								infoPanel.add(Box.createVerticalStrut(4));
+
+								JLabel priceLabel = new JLabel(String.format("%,d tokens", price));
+								priceLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(11f));
+								priceLabel.setForeground(GOLD);
+								priceLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+								infoPanel.add(priceLabel);
+
+								card.add(infoPanel, BorderLayout.CENTER);
+
+								// Right: buy button
+								JButton buyBtn = new JButton("Buy");
+								buyBtn.setFont(FontManager.getRunescapeBoldFont().deriveFont(12f));
+								buyBtn.setBackground(GOLD);
+								buyBtn.setForeground(Color.BLACK);
+								buyBtn.setFocusPainted(false);
+								buyBtn.setPreferredSize(new Dimension(60, 30));
+
+								final String caseId = id;
+								final String caseName = name;
+								final String closedImg = imgUrl;
+								final String openImg = openImgUrl;
+
+								buyBtn.addActionListener(e ->
+								{
+									buyBtn.setEnabled(false);
+									buyBtn.setText("...");
+									onBuyCase(caseId, caseName, closedImg, openImg, buyBtn);
+								});
+
+								card.add(buyBtn, BorderLayout.EAST);
+
+								marketPanel.add(card);
+								marketPanel.add(Box.createVerticalStrut(4));
+							}
+						}
+						marketPanel.revalidate();
+						marketPanel.repaint();
+					});
+				}
+			}
+			catch (Exception e)
+			{
+				log.warn("Failed to load market cases", e);
+			}
+		});
+	}
+
+	private void onBuyCase(String caseId, String caseName, String closedImg, String openImg, JButton btn)
+	{
+		String rsn = cachedRsn;
+		if (rsn == null)
+		{
+			SwingUtilities.invokeLater(() -> { btn.setEnabled(true); btn.setText("Buy"); });
+			return;
+		}
+
+		CompletableFuture.runAsync(() ->
+		{
+			try
+			{
+				String url = buildUrl("/api/cases/buy-and-open");
+				JsonObject body = new JsonObject();
+				body.addProperty("rsn", rsn);
+				body.addProperty("caseId", caseId);
+
+				Request request = new Request.Builder()
+					.url(url)
+					.post(RequestBody.create(JSON_TYPE, body.toString()))
+					.build();
+
+				try (Response response = httpClient.newCall(request).execute())
+				{
+					int code = response.code();
+					if (code == 402)
+					{
+						SwingUtilities.invokeLater(() ->
+						{
+							btn.setEnabled(true);
+							btn.setText("Buy");
+							marketMessageLabel.setText(
+								"<html><font color='#ff5252'>Not enough tokens!</font></html>");
+							marketMessageLabel.setVisible(true);
+						});
+						return;
+					}
+
+					if (!response.isSuccessful())
+					{
+						SwingUtilities.invokeLater(() ->
+						{
+							btn.setEnabled(true);
+							btn.setText("Buy");
+							marketMessageLabel.setText(
+								"<html><font color='#ff5252'>Purchase failed. Try again.</font></html>");
+							marketMessageLabel.setVisible(true);
+						});
+						return;
+					}
+
+					SwingUtilities.invokeLater(() ->
+					{
+						plugin.openCase(caseId, caseName, closedImg, openImg);
+						btn.setEnabled(true);
+						btn.setText("Buy");
+						marketMessageLabel.setVisible(false);
+						// Refresh dashboard tokens after purchase
+						scheduler.schedule(() -> loadDashboard(), 3, TimeUnit.SECONDS);
+					});
+				}
+			}
+			catch (Exception e)
+			{
+				log.warn("Failed to buy case", e);
+				SwingUtilities.invokeLater(() -> { btn.setEnabled(true); btn.setText("Buy"); });
+			}
+		});
+	}
+
+	// ── Inventory dialog ───────────────────────────────────────────────────────
+
+	private void onInventoryClicked()
+	{
+		if (!loggedIn || cachedRsn == null)
+		{
+			JOptionPane.showMessageDialog(this,
+				DESCRIPTION_LOGGED_OUT,
+				"Inventory",
+				JOptionPane.INFORMATION_MESSAGE);
+			return;
+		}
+
+		loadInventory();
+	}
+
+	private void loadInventory()
+	{
+		String rsn = cachedRsn;
+		if (rsn == null) return;
+
+		CompletableFuture.runAsync(() ->
+		{
+			try
+			{
+				String url = buildUrl("/api/plugin/inventory?rsn=" + URLEncoder.encode(rsn, "UTF-8"));
+				Request request = new Request.Builder().url(url).get().build();
+
+				try (Response response = httpClient.newCall(request).execute())
+				{
+					if (!response.isSuccessful()) return;
+					String body = response.body() != null ? response.body().string() : "";
+					JsonObject data = new JsonParser().parse(body).getAsJsonObject();
+					JsonArray cases = data.has("cases") ? data.getAsJsonArray("cases") : null;
+					JsonArray stickers = data.has("stickers") ? data.getAsJsonArray("stickers") : null;
+
+					SwingUtilities.invokeLater(() -> showInventoryDialog(cases, stickers));
+				}
+			}
+			catch (Exception e)
+			{
+				log.warn("Failed to load inventory", e);
+			}
+		});
+	}
+
+	private void showInventoryDialog(JsonArray cases, JsonArray stickers)
+	{
+		JPanel dialogPanel = new JPanel();
+		dialogPanel.setLayout(new BoxLayout(dialogPanel, BoxLayout.Y_AXIS));
+		dialogPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		dialogPanel.setPreferredSize(new Dimension(280, 400));
+
+		// Cases section
+		JLabel casesHeader = new JLabel("Cases");
+		casesHeader.setFont(FontManager.getRunescapeBoldFont().deriveFont(14f));
+		casesHeader.setForeground(GOLD);
+		casesHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
+		dialogPanel.add(casesHeader);
+		dialogPanel.add(Box.createVerticalStrut(6));
+
+		if (cases == null || cases.size() == 0)
+		{
+			JLabel empty = new JLabel("No cases in inventory");
+			empty.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+			empty.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+			empty.setAlignmentX(Component.LEFT_ALIGNMENT);
+			dialogPanel.add(empty);
+		}
+		else
+		{
+			java.util.Map<String, Integer> counts = new java.util.LinkedHashMap<>();
+			java.util.Map<String, JsonObject> caseData = new java.util.LinkedHashMap<>();
+			for (JsonElement el : cases)
+			{
+				JsonObject c = el.getAsJsonObject();
+				String id = c.get("item_id").getAsString();
+				counts.merge(id, 1, Integer::sum);
+				caseData.putIfAbsent(id, c);
+			}
+
+			for (java.util.Map.Entry<String, Integer> entry : counts.entrySet())
+			{
+				JsonObject c = caseData.get(entry.getKey());
+				String name = c.has("item_name") && !c.get("item_name").isJsonNull()
+					? c.get("item_name").getAsString() : entry.getKey();
+				int qty = entry.getValue();
+
+				JPanel row = new JPanel(new BorderLayout());
+				row.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+				row.setBorder(new EmptyBorder(8, 8, 8, 8));
+				row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 50));
+				row.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+				JLabel nameLabel = new JLabel(name + (qty > 1 ? " x" + qty : ""));
+				nameLabel.setForeground(Color.WHITE);
+				nameLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(13f));
+				row.add(nameLabel, BorderLayout.CENTER);
+
+				JButton openBtn = new JButton("Open");
+				openBtn.setFocusPainted(false);
+				openBtn.setBackground(GOLD);
+				openBtn.setForeground(Color.BLACK);
+				openBtn.setFont(FontManager.getRunescapeSmallFont().deriveFont(11f));
+
+				final String caseId = entry.getKey();
+				final String caseName = name;
+				final String imgUrl = c.has("item_image") && !c.get("item_image").isJsonNull()
+					? c.get("item_image").getAsString() : "";
+
+				openBtn.addActionListener(e ->
+				{
+					openBtn.setEnabled(false);
+					openBtn.setText("...");
+					fetchCaseConfigAndOpen(caseId, caseName, imgUrl, openBtn);
+				});
+				row.add(openBtn, BorderLayout.EAST);
+
+				dialogPanel.add(row);
+				dialogPanel.add(Box.createVerticalStrut(4));
+			}
+		}
+
+		dialogPanel.add(Box.createVerticalStrut(12));
+
+		// Stickers section
+		JLabel stickersHeader = new JLabel("Stickers");
+		stickersHeader.setFont(FontManager.getRunescapeBoldFont().deriveFont(14f));
+		stickersHeader.setForeground(GOLD);
+		stickersHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
+		dialogPanel.add(stickersHeader);
+		dialogPanel.add(Box.createVerticalStrut(6));
+
+		if (stickers == null || stickers.size() == 0)
+		{
+			JLabel empty = new JLabel("No stickers in inventory");
+			empty.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+			empty.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+			empty.setAlignmentX(Component.LEFT_ALIGNMENT);
+			dialogPanel.add(empty);
+		}
+		else
+		{
+			for (JsonElement el : stickers)
+			{
+				JsonObject s = el.getAsJsonObject();
+				String name = s.has("name") ? s.get("name").getAsString() : "Sticker";
+				String rarity = s.has("rarity") ? s.get("rarity").getAsString() : "";
+				double wear = s.has("wear") ? s.get("wear").getAsDouble() : 0;
+
+				JPanel row = new JPanel(new BorderLayout());
+				row.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+				row.setBorder(new EmptyBorder(8, 8, 8, 8));
+				row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 50));
+				row.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+				JLabel nameLabel = new JLabel(name);
+				nameLabel.setForeground(Color.WHITE);
+				nameLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(13f));
+				row.add(nameLabel, BorderLayout.CENTER);
+
+				JPanel detailPanel = new JPanel();
+				detailPanel.setLayout(new BoxLayout(detailPanel, BoxLayout.Y_AXIS));
+				detailPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+
+				if (!rarity.isEmpty())
+				{
+					JLabel rarityLabel = new JLabel(rarity);
+					rarityLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(10f));
+					rarityLabel.setForeground(getRarityColor(rarity));
+					rarityLabel.setAlignmentX(Component.RIGHT_ALIGNMENT);
+					detailPanel.add(rarityLabel);
+				}
+
+				JLabel wearLabel = new JLabel(String.format("%.4f", wear));
+				wearLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(10f));
+				wearLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+				wearLabel.setAlignmentX(Component.RIGHT_ALIGNMENT);
+				detailPanel.add(wearLabel);
+
+				row.add(detailPanel, BorderLayout.EAST);
+
+				dialogPanel.add(row);
+				dialogPanel.add(Box.createVerticalStrut(4));
+			}
+		}
+
+		JScrollPane scrollPane = new JScrollPane(dialogPanel);
+		scrollPane.setPreferredSize(new Dimension(300, 420));
+		scrollPane.setBorder(null);
+		scrollPane.getViewport().setBackground(ColorScheme.DARK_GRAY_COLOR);
+
+		JOptionPane.showMessageDialog(
+			SwingUtilities.getWindowAncestor(this),
+			scrollPane,
+			"Inventory",
+			JOptionPane.PLAIN_MESSAGE);
+	}
+
+	private Color getRarityColor(String rarity)
+	{
+		switch (rarity.toLowerCase())
+		{
+			case "legendary": return new Color(255, 165, 0);
+			case "epic": return new Color(163, 53, 238);
+			case "rare": return new Color(0, 112, 221);
+			case "uncommon": return new Color(30, 255, 0);
+			default: return ColorScheme.LIGHT_GRAY_COLOR;
+		}
+	}
+
+	// ── Case opening (from inventory) ──────────────────────────────────────────
+
+	private void fetchCaseConfigAndOpen(String caseId, String caseName, String fallbackImg, JButton btn)
+	{
+		CompletableFuture.runAsync(() ->
+		{
+			try
+			{
+				String url = buildUrl("/api/market/cases");
+				Request request = new Request.Builder().url(url).get().build();
+				String closedImg = fallbackImg;
+				String openImg = fallbackImg;
+
+				try (Response response = httpClient.newCall(request).execute())
+				{
+					if (response.isSuccessful() && response.body() != null)
+					{
+						JsonObject data = new JsonParser().parse(response.body().string()).getAsJsonObject();
+						JsonArray casesArr = data.getAsJsonArray("cases");
+						if (casesArr != null)
+						{
+							for (JsonElement el : casesArr)
+							{
+								JsonObject c = el.getAsJsonObject();
+								if (c.has("id") && c.get("id").getAsString().equals(caseId))
+								{
+									if (c.has("image") && !c.get("image").isJsonNull())
+										closedImg = c.get("image").getAsString();
+									if (c.has("imageOpen") && !c.get("imageOpen").isJsonNull())
+										openImg = c.get("imageOpen").getAsString();
+									break;
+								}
+							}
+						}
+					}
+				}
+
+				final String ci = closedImg;
+				final String oi = openImg;
+				SwingUtilities.invokeLater(() ->
+				{
+					plugin.openCase(caseId, caseName, ci, oi);
+					scheduler.schedule(() -> loadInventory(), 6, TimeUnit.SECONDS);
+					btn.setEnabled(true);
+					btn.setText("Open");
+				});
+			}
+			catch (Exception e)
+			{
+				log.warn("Failed to fetch case config", e);
+				SwingUtilities.invokeLater(() -> { btn.setEnabled(true); btn.setText("Open"); });
+			}
+		});
+	}
+
+	// ── Utility ────────────────────────────────────────────────────────────────
+
+	private String buildUrl(String path)
+	{
+		return API_URL + path;
+	}
+}
