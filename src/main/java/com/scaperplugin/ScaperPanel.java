@@ -484,23 +484,86 @@ public class ScaperPanel extends PluginPanel
 							for (JsonElement el : tasks)
 							{
 								JsonObject t = el.getAsJsonObject();
+								String taskId = t.has("id") ? t.get("id").getAsString() : "";
 								String label = t.has("label") ? t.get("label").getAsString() : "Task";
-								boolean completed = t.has("completed") && t.get("completed").getAsBoolean();
-								int progress = t.has("progress") ? t.get("progress").getAsInt() : 0;
-								int goal = t.has("goal") ? t.get("goal").getAsInt() : 1;
+								String difficulty = t.has("difficulty") ? t.get("difficulty").getAsString() : "easy";
+								String type = t.has("type") ? t.get("type").getAsString() : "";
+								int amount = t.has("amount") ? t.get("amount").getAsInt() : 1;
 								int taskTokens = t.has("tokens") ? t.get("tokens").getAsInt() : 0;
+								boolean enrolled = t.has("enrolled") && t.get("enrolled").getAsBoolean();
+								boolean claimed = t.has("claimed") && t.get("claimed").getAsBoolean();
+								int progress = (t.has("progress") && !t.get("progress").isJsonNull()) ? t.get("progress").getAsInt() : 0;
+								boolean complete = enrolled && progress >= amount;
 
-								JPanel row = new JPanel(new BorderLayout());
+								JPanel row = new JPanel(new BorderLayout(6, 0));
 								row.setBackground(DARKER_BG);
 								row.setBorder(new EmptyBorder(6, 8, 6, 8));
-								row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
+								row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 60));
 								row.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-								String statusIcon = completed ? "\u2713 " : "";
-								JLabel nameLabel = new JLabel("<html>" + statusIcon + label + "<br><font color='#888' size='2'>" + progress + "/" + goal + " \u2022 +" + taskTokens + " tokens</font></html>");
-								nameLabel.setForeground(completed ? new Color(76, 175, 80) : Color.WHITE);
+								// Difficulty color
+								Color diffColor = difficulty.equals("hard") ? new Color(244, 67, 54) :
+								                  difficulty.equals("medium") ? new Color(255, 152, 0) :
+								                  new Color(76, 175, 80);
+								String diffLabel = difficulty.substring(0, 1).toUpperCase() + difficulty.substring(1);
+
+								// Format progress text
+								String progressText;
+								if (!enrolled) {
+									progressText = "Not enrolled";
+								} else if (claimed) {
+									progressText = "\u2713 Claimed";
+								} else if (type.equals("xp_gain")) {
+									progressText = formatXp(progress) + " / " + formatXp(amount) + " XP";
+								} else {
+									progressText = progress + " / " + amount + " kills";
+								}
+
+								// Build label HTML
+								String html = "<html><font color='" + toHex(diffColor) + "' size='2'>[" + diffLabel + "]</font> " + label +
+									"<br><font color='#888' size='2'>" + progressText + " \u2022 +" + taskTokens + " tokens</font></html>";
+								JLabel nameLabel = new JLabel(html);
+								nameLabel.setForeground(claimed ? new Color(76, 175, 80) : Color.WHITE);
 								nameLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(13f));
 								row.add(nameLabel, BorderLayout.CENTER);
+
+								// Progress bar
+								if (enrolled && !claimed) {
+									JProgressBar bar = new JProgressBar(0, amount);
+									bar.setValue(Math.min(progress, amount));
+									bar.setPreferredSize(new Dimension(0, 6));
+									bar.setMaximumSize(new Dimension(Integer.MAX_VALUE, 6));
+									bar.setForeground(complete ? new Color(76, 175, 80) : new Color(212, 160, 23));
+									bar.setBackground(new Color(30, 30, 30));
+									bar.setBorderPainted(false);
+									bar.setStringPainted(false);
+
+									JPanel barWrap = new JPanel(new BorderLayout());
+									barWrap.setBackground(DARKER_BG);
+									barWrap.setBorder(new EmptyBorder(2, 0, 0, 0));
+									barWrap.add(bar, BorderLayout.CENTER);
+
+									JPanel colPanel = new JPanel();
+									colPanel.setLayout(new BoxLayout(colPanel, BoxLayout.Y_AXIS));
+									colPanel.setBackground(DARKER_BG);
+									colPanel.add(nameLabel);
+									colPanel.add(barWrap);
+									row.add(colPanel, BorderLayout.CENTER);
+								}
+
+								// Claim button
+								if (enrolled && complete && !claimed) {
+									JButton claimBtn = new JButton("Claim");
+									claimBtn.setFont(FontManager.getRunescapeSmallFont().deriveFont(11f));
+									claimBtn.setForeground(Color.WHITE);
+									claimBtn.setBackground(new Color(76, 175, 80));
+									claimBtn.setFocusPainted(false);
+									claimBtn.setBorderPainted(false);
+									claimBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+									claimBtn.setPreferredSize(new Dimension(55, 24));
+									claimBtn.addActionListener(e -> claimTask(taskId));
+									row.add(claimBtn, BorderLayout.EAST);
+								}
 
 								tasksPanel.add(row);
 								tasksPanel.add(Box.createVerticalStrut(4));
@@ -1224,6 +1287,36 @@ public class ScaperPanel extends PluginPanel
 			catch (Exception e)
 			{
 				log.debug("Failed to load image: {}", fullUrl);
+			}
+		});
+	}
+
+	private String formatXp(int xp) {
+		if (xp >= 1000000) return String.format("%.1fM", xp / 1000000.0);
+		if (xp >= 1000) return String.format("%.0fk", xp / 1000.0);
+		return String.valueOf(xp);
+	}
+
+	private String toHex(Color c) {
+		return String.format("#%02x%02x%02x", c.getRed(), c.getGreen(), c.getBlue());
+	}
+
+	private void claimTask(String taskId) {
+		String rsn = cachedRsn;
+		if (rsn == null || taskId == null || taskId.isEmpty()) return;
+		CompletableFuture.runAsync(() -> {
+			try {
+				String url = buildUrl("/api/plugin/tasks/claim");
+				String json = "{\"rsn\":\"" + rsn + "\",\"taskId\":\"" + taskId + "\"}";
+				RequestBody body = RequestBody.create(MediaType.parse("application/json"), json);
+				Request request = new Request.Builder().url(url).post(body).build();
+				try (Response response = httpClient.newCall(request).execute()) {
+					if (response.isSuccessful()) {
+						SwingUtilities.invokeLater(() -> loadDashboard());
+					}
+				}
+			} catch (Exception e) {
+				log.warn("Failed to claim task {}", taskId, e);
 			}
 		});
 	}
