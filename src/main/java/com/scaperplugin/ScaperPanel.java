@@ -58,6 +58,7 @@ public class ScaperPanel extends PluginPanel
 
 	// Market
 	private final JPanel marketGrid;
+	private final JLabel marketTokenValueLabel;
 
 	// Settings
 	private final JTextArea settingsDesc;
@@ -111,7 +112,7 @@ public class ScaperPanel extends PluginPanel
 		tabBar.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
 		tabDashboard = makeTabButton("Dashboard");
 		tabMarket = makeTabButton("Market");
-		tabSettings = makeTabButton("Settings");
+		tabSettings = makeTabButton("Clan");
 		tabBar.add(tabDashboard);
 		tabBar.add(tabMarket);
 		tabBar.add(tabSettings);
@@ -136,11 +137,11 @@ public class ScaperPanel extends PluginPanel
 		tokenRow.setAlignmentX(Component.LEFT_ALIGNMENT);
 		JLabel tokenLabel = new JLabel("Tokens");
 		tokenLabel.setForeground(GOLD);
-		tokenLabel.setFont(FontManager.getRunescapeBoldFont().deriveFont(16f));
+		tokenLabel.setFont(FontManager.getRunescapeBoldFont().deriveFont(15f));
 		tokenRow.add(tokenLabel, BorderLayout.WEST);
 		tokenValueLabel = new JLabel("0");
 		tokenValueLabel.setForeground(Color.WHITE);
-		tokenValueLabel.setFont(FontManager.getRunescapeBoldFont().deriveFont(16f));
+		tokenValueLabel.setFont(FontManager.getRunescapeBoldFont().deriveFont(15f));
 		tokenValueLabel.setHorizontalAlignment(SwingConstants.RIGHT);
 		tokenRow.add(tokenValueLabel, BorderLayout.EAST);
 		dashCard.add(tokenRow);
@@ -148,7 +149,7 @@ public class ScaperPanel extends PluginPanel
 
 		JLabel tasksTitle = new JLabel("Daily Tasks");
 		tasksTitle.setForeground(GOLD);
-		tasksTitle.setFont(FontManager.getRunescapeBoldFont().deriveFont(13f));
+		tasksTitle.setFont(FontManager.getRunescapeBoldFont().deriveFont(16f));
 		tasksTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
 		dashCard.add(tasksTitle);
 		dashCard.add(Box.createVerticalStrut(6));
@@ -171,6 +172,24 @@ public class ScaperPanel extends PluginPanel
 		marketCard.setBackground(DARK_BG);
 		marketCard.setBorder(new EmptyBorder(10, 8, 8, 8));
 
+		// Market token row
+		JPanel mktTokenRow = new JPanel(new BorderLayout());
+		mktTokenRow.setBackground(DARKER_BG);
+		mktTokenRow.setBorder(new EmptyBorder(8, 10, 8, 10));
+		mktTokenRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
+		mktTokenRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+		JLabel mktTokenLabel = new JLabel("Tokens");
+		mktTokenLabel.setForeground(GOLD);
+		mktTokenLabel.setFont(FontManager.getRunescapeBoldFont().deriveFont(15f));
+		mktTokenRow.add(mktTokenLabel, BorderLayout.WEST);
+		marketTokenValueLabel = new JLabel("0");
+		marketTokenValueLabel.setForeground(Color.WHITE);
+		marketTokenValueLabel.setFont(FontManager.getRunescapeBoldFont().deriveFont(15f));
+		marketTokenValueLabel.setHorizontalAlignment(SwingConstants.RIGHT);
+		mktTokenRow.add(marketTokenValueLabel, BorderLayout.EAST);
+		marketCard.add(mktTokenRow);
+		marketCard.add(Box.createVerticalStrut(10));
+
 		marketGrid = new JPanel(new GridLayout(0, 2, 6, 6));
 		marketGrid.setBackground(DARK_BG);
 		marketGrid.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
@@ -191,7 +210,7 @@ public class ScaperPanel extends PluginPanel
 
 		cardPanel.add(marketCard, "market");
 
-		// ── Settings card ──
+		// ── Clan card (formerly Settings — settings moved to gear icon) ──
 		JPanel settingsCard = new JPanel();
 		settingsCard.setLayout(new BoxLayout(settingsCard, BoxLayout.Y_AXIS));
 		settingsCard.setBackground(DARK_BG);
@@ -259,6 +278,23 @@ public class ScaperPanel extends PluginPanel
 
 		cardPanel.add(settingsCard, "settings");
 
+		// ── Clan card ──
+		JPanel clanCard = new JPanel();
+		clanCard.setLayout(new BoxLayout(clanCard, BoxLayout.Y_AXIS));
+		clanCard.setBackground(DARK_BG);
+		clanCard.setBorder(new EmptyBorder(20, 12, 8, 12));
+		JLabel clanTitle = new JLabel("Clan");
+		clanTitle.setForeground(GOLD);
+		clanTitle.setFont(FontManager.getRunescapeBoldFont().deriveFont(18f));
+		clanTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
+		clanCard.add(clanTitle);
+		clanCard.add(Box.createVerticalStrut(10));
+		JLabel clanHint = new JLabel("<html><font color='#aaa'>Clan features coming soon.<br><br>Manage your clan, view members,<br>and track events — all from<br>within the plugin.</font></html>");
+		clanHint.setFont(FontManager.getRunescapeSmallFont().deriveFont(16f));
+		clanHint.setAlignmentX(Component.LEFT_ALIGNMENT);
+		clanCard.add(clanHint);
+		cardPanel.add(clanCard, "clan");
+
 		// Logged-out overlay
 		loggedOutPanel = new JPanel(new BorderLayout());
 		loggedOutPanel.setBackground(DARK_BG);
@@ -272,8 +308,8 @@ public class ScaperPanel extends PluginPanel
 
 		center.add(cardPanel, BorderLayout.CENTER);
 
-		// ── Inventory button (bottom) ──
-		JPanel bottomPanel = new JPanel(new BorderLayout());
+		// ── Bottom bar: Inventory button + Settings gear ──
+		JPanel bottomPanel = new JPanel(new BorderLayout(6, 0));
 		bottomPanel.setBackground(DARK_BG);
 		bottomPanel.setBorder(new EmptyBorder(8, 8, 8, 8));
 		inventoryButton = new JButton("Inventory");
@@ -287,6 +323,18 @@ public class ScaperPanel extends PluginPanel
 		));
 		inventoryButton.addActionListener(e -> openInventoryDialog());
 		bottomPanel.add(inventoryButton, BorderLayout.CENTER);
+
+		JButton gearBtn = new JButton("⚙");
+		gearBtn.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 18));
+		gearBtn.setForeground(new Color(150, 150, 150));
+		gearBtn.setBackground(DARKER_BG);
+		gearBtn.setFocusPainted(false);
+		gearBtn.setBorderPainted(false);
+		gearBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+		gearBtn.setPreferredSize(new Dimension(34, 34));
+		gearBtn.setToolTipText("Settings");
+		gearBtn.addActionListener(e -> switchTab("settings"));
+		bottomPanel.add(gearBtn, BorderLayout.EAST);
 		center.add(bottomPanel, BorderLayout.SOUTH);
 
 		add(center, BorderLayout.CENTER);
@@ -294,7 +342,7 @@ public class ScaperPanel extends PluginPanel
 		// Tab click handlers
 		tabDashboard.addActionListener(e -> switchTab("dashboard"));
 		tabMarket.addActionListener(e -> switchTab("market"));
-		tabSettings.addActionListener(e -> switchTab("settings"));
+		tabSettings.addActionListener(e -> switchTab("clan"));
 
 		// Start in logged-out state
 		showLoggedOut();
@@ -462,9 +510,32 @@ public class ScaperPanel extends PluginPanel
 					JsonArray tasks = data.has("tasks") ? data.getAsJsonArray("tasks") : new JsonArray();
 					boolean isLinked = data.has("linked") && data.get("linked").getAsBoolean();
 
+					// Auto-enroll if any tasks are not enrolled
+					boolean needsEnroll = false;
+					for (JsonElement el : tasks) {
+						JsonObject t = el.getAsJsonObject();
+						if (!t.has("enrolled") || !t.get("enrolled").getAsBoolean()) {
+							needsEnroll = true;
+							break;
+						}
+					}
+					if (isLinked && needsEnroll) {
+						try {
+							String enrollUrl = buildUrl("/api/plugin/tasks/enroll");
+							String enrollJson = "{\"rsn\":\"" + rsn + "\"}";
+							RequestBody enrollBody = RequestBody.create(JSON_TYPE, enrollJson);
+							Request enrollReq = new Request.Builder().url(enrollUrl).post(enrollBody).build();
+							httpClient.newCall(enrollReq).execute().close();
+							// Reload dashboard after enrollment
+							loadDashboard();
+							return;
+						} catch (Exception ignored) {}
+					}
+
 					SwingUtilities.invokeLater(() ->
 					{
 						tokenValueLabel.setText(String.format("%,d", tokens));
+						marketTokenValueLabel.setText(String.format("%,d", tokens));
 						tasksPanel.removeAll();
 						if (!isLinked)
 						{
@@ -495,78 +566,133 @@ public class ScaperPanel extends PluginPanel
 								int progress = (t.has("progress") && !t.get("progress").isJsonNull()) ? t.get("progress").getAsInt() : 0;
 								boolean complete = enrolled && progress >= amount;
 
-								JPanel row = new JPanel(new BorderLayout(6, 0));
-								row.setBackground(DARKER_BG);
-								row.setBorder(new EmptyBorder(6, 8, 6, 8));
-								row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 60));
-								row.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-								// Difficulty color
+								// Difficulty styling
 								Color diffColor = difficulty.equals("hard") ? new Color(244, 67, 54) :
 								                  difficulty.equals("medium") ? new Color(255, 152, 0) :
 								                  new Color(76, 175, 80);
-								String diffLabel = difficulty.substring(0, 1).toUpperCase() + difficulty.substring(1);
+								Color diffBg = difficulty.equals("hard") ? new Color(244, 67, 54, 25) :
+								               difficulty.equals("medium") ? new Color(255, 152, 0, 25) :
+								               new Color(76, 175, 80, 25);
+								String diffLabel = difficulty.toUpperCase();
+
+								// Bar colors — gradient feel via two-tone
+								Color barFg = complete ? new Color(76, 175, 80) :
+								             difficulty.equals("hard") ? new Color(244, 67, 54) :
+								             difficulty.equals("medium") ? new Color(255, 152, 0) :
+								             new Color(212, 160, 23);
+								Color barBg = new Color(20, 20, 20);
 
 								// Format progress text
 								String progressText;
 								if (!enrolled) {
-									progressText = "Not enrolled";
+									progressText = "Waiting for snapshot...";
 								} else if (claimed) {
-									progressText = "\u2713 Claimed";
+									progressText = "\u2713 Claimed!";
 								} else if (type.equals("xp_gain")) {
 									progressText = formatXp(progress) + " / " + formatXp(amount) + " XP";
 								} else {
 									progressText = progress + " / " + amount + " kills";
 								}
 
-								// Build label HTML
-								String html = "<html><font color='" + toHex(diffColor) + "' size='2'>[" + diffLabel + "]</font> " + label +
-									"<br><font color='#888' size='2'>" + progressText + " \u2022 +" + taskTokens + " tokens</font></html>";
-								JLabel nameLabel = new JLabel(html);
-								nameLabel.setForeground(claimed ? new Color(76, 175, 80) : Color.WHITE);
-								nameLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(13f));
-								row.add(nameLabel, BorderLayout.CENTER);
+								// Percentage
+								int pct = amount > 0 ? Math.min(100, (int)((long)progress * 100 / amount)) : 0;
 
-								// Progress bar
+								// === Card panel ===
+								JPanel card = new JPanel();
+								card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
+								card.setBackground(claimed ? new Color(20, 28, 20) : new Color(24, 24, 24));
+								card.setBorder(BorderFactory.createCompoundBorder(
+									new LineBorder(claimed ? new Color(76, 175, 80, 60) : new Color(50, 50, 50), 1, true),
+									new EmptyBorder(8, 10, 8, 10)
+								));
+								card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 100));
+								card.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+								// --- Top row: difficulty badge + task name ---
+								JPanel topRow = new JPanel(new BorderLayout(6, 0));
+								topRow.setBackground(card.getBackground());
+								topRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+								JLabel badge = new JLabel(" " + diffLabel + " ");
+								badge.setFont(FontManager.getRunescapeSmallFont().deriveFont(Font.BOLD, 10f));
+								badge.setForeground(diffColor);
+								badge.setBackground(diffBg);
+								badge.setOpaque(true);
+								badge.setBorder(BorderFactory.createCompoundBorder(
+									new LineBorder(new Color(diffColor.getRed(), diffColor.getGreen(), diffColor.getBlue(), 80), 1, true),
+									new EmptyBorder(1, 4, 1, 4)
+								));
+
+								JLabel nameLabel = new JLabel(label);
+								nameLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(Font.BOLD, 14f));
+								nameLabel.setForeground(claimed ? new Color(76, 175, 80) : new Color(230, 230, 230));
+
+								JPanel badgeWrap = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+								badgeWrap.setBackground(card.getBackground());
+								badgeWrap.add(badge);
+								badgeWrap.add(nameLabel);
+								topRow.add(badgeWrap, BorderLayout.CENTER);
+
+								// Token reward label on the right
+								JLabel tokenLabel = new JLabel("+" + taskTokens);
+								tokenLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(Font.BOLD, 12f));
+								tokenLabel.setForeground(new Color(212, 160, 23));
+								topRow.add(tokenLabel, BorderLayout.EAST);
+
+								card.add(topRow);
+								card.add(Box.createVerticalStrut(4));
+
+								// --- Progress bar ---
 								if (enrolled && !claimed) {
-									JProgressBar bar = new JProgressBar(0, amount);
+									JProgressBar bar = new JProgressBar(0, Math.max(amount, 1));
 									bar.setValue(Math.min(progress, amount));
-									bar.setPreferredSize(new Dimension(0, 6));
-									bar.setMaximumSize(new Dimension(Integer.MAX_VALUE, 6));
-									bar.setForeground(complete ? new Color(76, 175, 80) : new Color(212, 160, 23));
-									bar.setBackground(new Color(30, 30, 30));
+									bar.setPreferredSize(new Dimension(0, 10));
+									bar.setMaximumSize(new Dimension(Integer.MAX_VALUE, 10));
+									bar.setForeground(barFg);
+									bar.setBackground(barBg);
 									bar.setBorderPainted(false);
 									bar.setStringPainted(false);
-
-									JPanel barWrap = new JPanel(new BorderLayout());
-									barWrap.setBackground(DARKER_BG);
-									barWrap.setBorder(new EmptyBorder(2, 0, 0, 0));
-									barWrap.add(bar, BorderLayout.CENTER);
-
-									JPanel colPanel = new JPanel();
-									colPanel.setLayout(new BoxLayout(colPanel, BoxLayout.Y_AXIS));
-									colPanel.setBackground(DARKER_BG);
-									colPanel.add(nameLabel);
-									colPanel.add(barWrap);
-									row.add(colPanel, BorderLayout.CENTER);
+									bar.setAlignmentX(Component.LEFT_ALIGNMENT);
+									card.add(bar);
+									card.add(Box.createVerticalStrut(3));
 								}
+
+								// --- Bottom row: progress text + claim button ---
+								JPanel bottomRow = new JPanel(new BorderLayout(4, 0));
+								bottomRow.setBackground(card.getBackground());
+								bottomRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+								String statusHtml;
+								if (claimed) {
+									statusHtml = "<html><font color='#4caf50'><b>\u2713 Claimed!</b></font></html>";
+								} else if (!enrolled) {
+									statusHtml = "<html><font color='#888'>Waiting for snapshot...</font></html>";
+								} else {
+									String pctColor = complete ? "#4caf50" : "#aaa";
+									statusHtml = "<html><font color='#ccc'>" + progressText + "</font> <font color='" + pctColor + "'>(" + pct + "%)</font></html>";
+								}
+								JLabel statusLabel = new JLabel(statusHtml);
+								statusLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(13f));
+								bottomRow.add(statusLabel, BorderLayout.CENTER);
 
 								// Claim button
 								if (enrolled && complete && !claimed) {
 									JButton claimBtn = new JButton("Claim");
-									claimBtn.setFont(FontManager.getRunescapeSmallFont().deriveFont(11f));
-									claimBtn.setForeground(Color.WHITE);
-									claimBtn.setBackground(new Color(76, 175, 80));
+									claimBtn.setFont(FontManager.getRunescapeSmallFont().deriveFont(Font.BOLD, 11f));
+									claimBtn.setForeground(new Color(20, 20, 20));
+									claimBtn.setBackground(new Color(212, 160, 23));
 									claimBtn.setFocusPainted(false);
 									claimBtn.setBorderPainted(false);
 									claimBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-									claimBtn.setPreferredSize(new Dimension(55, 24));
+									claimBtn.setPreferredSize(new Dimension(60, 22));
 									claimBtn.addActionListener(e -> claimTask(taskId));
-									row.add(claimBtn, BorderLayout.EAST);
+									bottomRow.add(claimBtn, BorderLayout.EAST);
 								}
 
-								tasksPanel.add(row);
-								tasksPanel.add(Box.createVerticalStrut(4));
+								card.add(bottomRow);
+
+								tasksPanel.add(card);
+								tasksPanel.add(Box.createVerticalStrut(6));
 							}
 						}
 						tasksPanel.revalidate();
