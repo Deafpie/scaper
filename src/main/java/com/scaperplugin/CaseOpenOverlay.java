@@ -12,12 +12,11 @@ import net.runelite.client.ui.overlay.OverlayPosition;
 import okhttp3.*;
 
 import javax.imageio.ImageIO;
-import javax.sound.sampled.*;
+import net.runelite.client.audio.AudioPlayer;
 import java.awt.*;
 import java.awt.event.MouseEvent;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
-import java.io.InputStream;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
@@ -72,21 +71,19 @@ public class CaseOpenOverlay extends Overlay
 	private final ConcurrentHashMap<String, BufferedImage> imageCache = new ConcurrentHashMap<>();
 
 	// Sounds
-	private Clip caseOpenSound;
-	private Clip tickingSound;
-	private Clip revealSound;
+	private AudioPlayer audioPlayer;
 
 	// Click state
 	private boolean caseClicked = false;
 
-	public CaseOpenOverlay(Client client, OkHttpClient httpClient)
+	public CaseOpenOverlay(Client client, OkHttpClient httpClient, AudioPlayer audioPlayer)
 	{
 		this.client = client;
 		this.httpClient = httpClient;
+		this.audioPlayer = audioPlayer;
 		setPosition(OverlayPosition.DYNAMIC);
 		setLayer(OverlayLayer.ALWAYS_ON_TOP);
 		setPriority(999);
-		loadSounds();
 	}
 
 	public boolean isActive()
@@ -124,13 +121,13 @@ public class CaseOpenOverlay extends Overlay
 			scrollOffset = 0;
 			animStartTime = System.currentTimeMillis();
 			state = State.ROULETTE_SPINNING;
-			playSound(tickingSound);
+			playSound("/ticking_sound.wav");
 		}
 		else if (state == State.ROULETTE_SPINNING)
 		{
 			// Skip to reveal immediately
-			stopSound(tickingSound);
-			playSound(revealSound);
+			// ticking sound ends naturally
+			playSound("/reveal_sound.wav");
 			state = State.REVEAL;
 			animStartTime = System.currentTimeMillis();
 		}
@@ -138,7 +135,7 @@ public class CaseOpenOverlay extends Overlay
 		{
 			// Dismiss
 			state = State.HIDDEN;
-			stopSound(tickingSound);
+			// ticking sound ends naturally
 		}
 	}
 
@@ -207,7 +204,7 @@ public class CaseOpenOverlay extends Overlay
 					}
 
 					// Show the open case image for 1 second before roulette
-					playSound(caseOpenSound);
+					playSound("/case_open_sound.wav");
 					animStartTime = System.currentTimeMillis();
 					state = State.CASE_OPENING;
 				}
@@ -332,7 +329,7 @@ public class CaseOpenOverlay extends Overlay
 			state = State.ROULETTE_SPINNING;
 			new Thread(() -> {
 				try { Thread.sleep(300); } catch (InterruptedException ignored) {}
-				playSound(tickingSound);
+				playSound("/ticking_sound.wav");
 			}).start();
 		}
 	}
@@ -409,8 +406,8 @@ public class CaseOpenOverlay extends Overlay
 		// Check if done
 		if (progress >= 1.0)
 		{
-			stopSound(tickingSound);
-			playSound(revealSound);
+			// ticking sound ends naturally
+			playSound("/reveal_sound.wav");
 			state = State.REVEAL;
 			animStartTime = System.currentTimeMillis();
 		}
@@ -501,7 +498,7 @@ public class CaseOpenOverlay extends Overlay
 		g.drawString("\u2715", w - 30, 30);
 	}
 
-	// ── Image loading ──────────────────────────────────────────────────────────
+	// â”€â”€ Image loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 	private void loadImageAsync(String url, java.util.function.Consumer<BufferedImage> callback)
 	{
@@ -533,50 +530,21 @@ public class CaseOpenOverlay extends Overlay
 		}).start();
 	}
 
-	// ── Sound ──────────────────────────────────────────────────────────────────
+	// â”€â”€ Sound â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-	private void loadSounds()
+	private void playSound(String resource)
 	{
-		caseOpenSound = loadSound("/case_open_sound.wav");
-		tickingSound = loadSound("/ticking_sound.wav");
-		revealSound = loadSound("/reveal_sound.wav");
-	}
-
-	private Clip loadSound(String resource)
-	{
-		try (InputStream in = getClass().getResourceAsStream(resource))
+		try
 		{
-			if (in == null) return null;
-			AudioInputStream ais = AudioSystem.getAudioInputStream(in);
-			Clip clip = AudioSystem.getClip();
-			clip.open(ais);
-			return clip;
+			audioPlayer.play(getClass(), resource, 0f);
 		}
 		catch (Exception e)
 		{
-			log.debug("Could not load sound: {}", resource);
-			return null;
+			log.debug("Could not play sound: {}", resource);
 		}
 	}
 
-	private void playSound(Clip clip)
-	{
-		if (clip == null) return;
-		try
-		{
-			clip.setFramePosition(0);
-			clip.start();
-		}
-		catch (Exception ignored) {}
-	}
-
-	private void stopSound(Clip clip)
-	{
-		if (clip == null) return;
-		try { clip.stop(); } catch (Exception ignored) {}
-	}
-
-	// ── Strip item data class ──────────────────────────────────────────────────
+	// â”€â”€ Strip item data class â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 	static class StripItem
 	{

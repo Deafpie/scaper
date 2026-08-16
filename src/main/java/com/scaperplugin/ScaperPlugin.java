@@ -23,6 +23,7 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.audio.AudioPlayer;
 import okhttp3.OkHttpClient;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -68,6 +69,9 @@ public class ScaperPlugin extends Plugin implements MouseListener
 
 	@Inject
 	private MouseManager mouseManager;
+
+	@Inject
+	private AudioPlayer audioPlayer;
 
 	private ScaperPanel panel;
 	private NavigationButton navButton;
@@ -192,7 +196,7 @@ public class ScaperPlugin extends Plugin implements MouseListener
         @Override
         protected void startUp()
         {
-                caseOpenOverlay = new CaseOpenOverlay(client, httpClient);
+                caseOpenOverlay = new CaseOpenOverlay(client, httpClient, audioPlayer);
                 panel = new ScaperPanel(client, httpClient, this);
                 tracker = new ScaperTracker(client, httpClient);
 
