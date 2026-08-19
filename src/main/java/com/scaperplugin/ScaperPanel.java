@@ -69,6 +69,9 @@ public class ScaperPanel extends PluginPanel
 	private final JButton generateButton;
 	private final JButton unlinkButton;
 
+	// Clan
+	private final JPanel clanContentPanel;
+
 	// Inventory button
 	private final JButton inventoryButton;
 
@@ -279,20 +282,22 @@ public class ScaperPanel extends PluginPanel
 		cardPanel.add(settingsCard, "settings");
 
 		// ── Clan card ──
-		JPanel clanCard = new JPanel();
-		clanCard.setLayout(new BoxLayout(clanCard, BoxLayout.Y_AXIS));
+		JPanel clanCard = new JPanel(new BorderLayout());
 		clanCard.setBackground(DARK_BG);
-		clanCard.setBorder(new EmptyBorder(20, 12, 8, 12));
-		JLabel clanTitle = new JLabel("Clan");
-		clanTitle.setForeground(GOLD);
-		clanTitle.setFont(FontManager.getRunescapeBoldFont().deriveFont(18f));
-		clanTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
-		clanCard.add(clanTitle);
-		clanCard.add(Box.createVerticalStrut(10));
-		JLabel clanHint = new JLabel("<html><font color='#aaa'>Clan features coming soon.<br><br>Manage your clan, view members,<br>and track events — all from<br>within the plugin.</font></html>");
-		clanHint.setFont(FontManager.getRunescapeSmallFont().deriveFont(16f));
-		clanHint.setAlignmentX(Component.LEFT_ALIGNMENT);
-		clanCard.add(clanHint);
+		clanContentPanel = new JPanel();
+		clanContentPanel.setLayout(new BoxLayout(clanContentPanel, BoxLayout.Y_AXIS));
+		clanContentPanel.setBackground(DARK_BG);
+		clanContentPanel.setBorder(new EmptyBorder(12, 12, 8, 12));
+		JLabel clanLoading = new JLabel("Loading clan data...");
+		clanLoading.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		clanLoading.setFont(FontManager.getRunescapeSmallFont().deriveFont(14f));
+		clanContentPanel.add(clanLoading);
+		JScrollPane clanScroll = new JScrollPane(clanContentPanel);
+		clanScroll.setBorder(null);
+		clanScroll.setBackground(DARK_BG);
+		clanScroll.getViewport().setBackground(DARK_BG);
+		clanScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+		clanCard.add(clanScroll, BorderLayout.CENTER);
 		cardPanel.add(clanCard, "clan");
 
 		// Logged-out overlay
@@ -374,6 +379,7 @@ public class ScaperPanel extends PluginPanel
 
 		if ("dashboard".equals(tab)) loadDashboard();
 		if ("market".equals(tab)) loadMarket();
+		if ("clan".equals(tab)) loadClan();
 	}
 
 	private void updateTabStyles()
@@ -869,6 +875,250 @@ public class ScaperPanel extends PluginPanel
 	}
 
 	// ── Inventory dialog ───────────────────────────────────────────────────────
+
+	private void loadClan()
+	{
+		String rsn = cachedRsn;
+		if (rsn == null) return;
+
+		CompletableFuture.runAsync(() ->
+		{
+			try
+			{
+				String url = buildUrl("/api/plugin/clan?rsn=" + URLEncoder.encode(rsn, "UTF-8"));
+				Request request = new Request.Builder().url(url).get().build();
+				try (Response response = httpClient.newCall(request).execute())
+				{
+					if (!response.isSuccessful()) return;
+					String body = response.body() != null ? response.body().string() : "";
+					JsonObject data = new JsonParser().parse(body).getAsJsonObject();
+
+					SwingUtilities.invokeLater(() ->
+					{
+						clanContentPanel.removeAll();
+
+						if (!data.has("clan") || data.get("clan").isJsonNull())
+						{
+							JLabel noClan = new JLabel("<html><font color='#aaa'>You are not in a clan,<br>or no clan data is available yet.</font></html>");
+							noClan.setFont(FontManager.getRunescapeSmallFont().deriveFont(14f));
+							clanContentPanel.add(noClan);
+							clanContentPanel.revalidate();
+							clanContentPanel.repaint();
+							return;
+						}
+
+						JsonObject clan = data.getAsJsonObject("clan");
+						String clanName = clan.has("name") ? clan.get("name").getAsString() : "Unknown";
+						int totalMembers = clan.has("totalMembers") ? clan.get("totalMembers").getAsInt() : 0;
+						int onlineMembers = clan.has("onlineMembers") ? clan.get("onlineMembers").getAsInt() : 0;
+						String myRank = clan.has("myRank") && !clan.get("myRank").isJsonNull() ? clan.get("myRank").getAsString() : "";
+
+						// Clan header
+						JLabel nameLabel = new JLabel(clanName);
+						nameLabel.setForeground(GOLD);
+						nameLabel.setFont(FontManager.getRunescapeBoldFont().deriveFont(18f));
+						nameLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+						clanContentPanel.add(nameLabel);
+						clanContentPanel.add(Box.createVerticalStrut(4));
+
+						String meta = totalMembers + " members";
+						if (onlineMembers > 0) meta += "  •  " + onlineMembers + " online";
+						if (!myRank.isEmpty()) meta += "  •  " + myRank;
+						JLabel metaLabel = new JLabel(meta);
+						metaLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+						metaLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+						metaLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+						clanContentPanel.add(metaLabel);
+						clanContentPanel.add(Box.createVerticalStrut(14));
+
+						// Events section
+						JLabel eventsTitle = new JLabel("EVENTS");
+						eventsTitle.setForeground(GOLD);
+						eventsTitle.setFont(FontManager.getRunescapeBoldFont().deriveFont(13f));
+						eventsTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
+						clanContentPanel.add(eventsTitle);
+						clanContentPanel.add(Box.createVerticalStrut(6));
+
+						JsonArray events = clan.has("events") ? clan.getAsJsonArray("events") : new JsonArray();
+						if (events.size() == 0)
+						{
+							JLabel noEvents = new JLabel("No upcoming events");
+							noEvents.setForeground(new Color(120, 120, 120));
+							noEvents.setFont(FontManager.getRunescapeSmallFont().deriveFont(13f));
+							noEvents.setAlignmentX(Component.LEFT_ALIGNMENT);
+							clanContentPanel.add(noEvents);
+						}
+						else
+						{
+							long now = System.currentTimeMillis();
+							for (JsonElement el : events)
+							{
+								JsonObject ev = el.getAsJsonObject();
+								String title = ev.has("title") ? ev.get("title").getAsString() : "Event";
+								long startsAt = ev.has("startsAtMs") ? ev.get("startsAtMs").getAsLong() : 0;
+								long endsAt = ev.has("endsAtMs") ? ev.get("endsAtMs").getAsLong() : 0;
+								boolean isActive = startsAt <= now && endsAt > now;
+								boolean isPast = endsAt <= now;
+
+								JPanel evCard = new JPanel();
+								evCard.setLayout(new BoxLayout(evCard, BoxLayout.Y_AXIS));
+								evCard.setBackground(DARKER_BG);
+								evCard.setBorder(BorderFactory.createCompoundBorder(
+									new LineBorder(isActive ? GOLD : new Color(50, 50, 50), 1),
+									new EmptyBorder(6, 8, 6, 8)
+								));
+								evCard.setAlignmentX(Component.LEFT_ALIGNMENT);
+								evCard.setMaximumSize(new Dimension(Integer.MAX_VALUE, 120));
+
+								JLabel evName = new JLabel(title);
+								evName.setForeground(isActive ? GOLD : Color.WHITE);
+								evName.setFont(FontManager.getRunescapeBoldFont().deriveFont(13f));
+								evCard.add(evName);
+
+								String location = ev.has("location") && !ev.get("location").isJsonNull() ? ev.get("location").getAsString() : "";
+								if (!location.isEmpty())
+								{
+									JLabel locLabel = new JLabel(location);
+									locLabel.setForeground(new Color(150, 150, 150));
+									locLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(11f));
+									evCard.add(locLabel);
+								}
+
+								String desc = ev.has("description") && !ev.get("description").isJsonNull() ? ev.get("description").getAsString() : "";
+								if (!desc.isEmpty())
+								{
+									JLabel descLabel = new JLabel("<html>" + desc.replace("\n", "<br>") + "</html>");
+									descLabel.setForeground(new Color(170, 170, 170));
+									descLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(11f));
+									evCard.add(descLabel);
+								}
+
+								String timeStr;
+								if (isActive) timeStr = "In progress";
+								else if (isPast) timeStr = "Ended";
+								else
+								{
+									java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("MMM d, h:mm a");
+									timeStr = sdf.format(new java.util.Date(startsAt));
+								}
+								JLabel evTime = new JLabel(timeStr);
+								evTime.setForeground(isActive ? new Color(120, 200, 120) : ColorScheme.LIGHT_GRAY_COLOR);
+								evTime.setFont(FontManager.getRunescapeSmallFont().deriveFont(11f));
+								evCard.add(evTime);
+
+								clanContentPanel.add(evCard);
+								clanContentPanel.add(Box.createVerticalStrut(4));
+							}
+						}
+
+						// Featured event leaderboard
+						if (clan.has("featuredEvent") && !clan.get("featuredEvent").isJsonNull())
+						{
+							JsonObject fe = clan.getAsJsonObject("featuredEvent");
+							boolean isActive = fe.has("isActive") && fe.get("isActive").getAsBoolean();
+							String feTitle = fe.has("title") ? fe.get("title").getAsString() : "Event";
+
+							clanContentPanel.add(Box.createVerticalStrut(14));
+							JLabel lbTitle = new JLabel(isActive ? "LEADERBOARD" : "UPCOMING EVENT");
+							lbTitle.setForeground(GOLD);
+							lbTitle.setFont(FontManager.getRunescapeBoldFont().deriveFont(13f));
+							lbTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
+							clanContentPanel.add(lbTitle);
+							clanContentPanel.add(Box.createVerticalStrut(2));
+
+							JLabel feLabel = new JLabel(feTitle);
+							feLabel.setForeground(Color.WHITE);
+							feLabel.setFont(FontManager.getRunescapeBoldFont().deriveFont(14f));
+							feLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+							clanContentPanel.add(feLabel);
+
+							if (fe.has("tracker") && !fe.get("tracker").isJsonNull())
+							{
+								JsonObject tr = fe.getAsJsonObject("tracker");
+								String metric = tr.has("metric") ? tr.get("metric").getAsString().toUpperCase() : "";
+								String key = tr.has("key") ? tr.get("key").getAsString() : "";
+								JLabel trLabel = new JLabel(metric + ": " + key);
+								trLabel.setForeground(new Color(150, 150, 150));
+								trLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(11f));
+								trLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+								clanContentPanel.add(trLabel);
+							}
+
+							clanContentPanel.add(Box.createVerticalStrut(6));
+
+							JsonArray lb = fe.has("leaderboard") ? fe.getAsJsonArray("leaderboard") : new JsonArray();
+							if (lb.size() == 0 && isActive)
+							{
+								JLabel noData = new JLabel("No progress recorded yet.");
+								noData.setForeground(new Color(120, 120, 120));
+								noData.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+								noData.setAlignmentX(Component.LEFT_ALIGNMENT);
+								clanContentPanel.add(noData);
+							}
+							else
+							{
+								String metricLabel = (fe.has("tracker") && !fe.get("tracker").isJsonNull()
+									&& "kc".equals(fe.getAsJsonObject("tracker").get("metric").getAsString())) ? "KC" : "XP";
+
+								for (int i = 0; i < lb.size(); i++)
+								{
+									JsonObject p = lb.get(i).getAsJsonObject();
+									String pName = p.has("displayName") ? p.get("displayName").getAsString() : p.get("rsn").getAsString();
+									int gain = p.has("gain") ? p.get("gain").getAsInt() : 0;
+									int place = i + 1;
+
+									JPanel row = new JPanel(new BorderLayout(6, 0));
+									row.setBackground(DARKER_BG);
+									row.setBorder(new EmptyBorder(4, 8, 4, 8));
+									row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
+									row.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+									String placeStr;
+									Color placeColor;
+									if (place == 1) { placeStr = "1st"; placeColor = GOLD; }
+									else if (place == 2) { placeStr = "2nd"; placeColor = new Color(192, 192, 192); }
+									else if (place == 3) { placeStr = "3rd"; placeColor = new Color(205, 127, 50); }
+									else { placeStr = place + "th"; placeColor = ColorScheme.LIGHT_GRAY_COLOR; }
+
+									JLabel placeLabel = new JLabel(placeStr);
+									placeLabel.setForeground(placeColor);
+									placeLabel.setFont(FontManager.getRunescapeBoldFont().deriveFont(12f));
+									placeLabel.setPreferredSize(new Dimension(30, 20));
+									row.add(placeLabel, BorderLayout.WEST);
+
+									JLabel nameL = new JLabel(pName);
+									nameL.setForeground(Color.WHITE);
+									nameL.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+									row.add(nameL, BorderLayout.CENTER);
+
+									boolean eventEnded = fe.has("endsAtMs") && fe.get("endsAtMs").getAsLong() <= System.currentTimeMillis();
+									String gainStr;
+									if (place == 1 && eventEnded)
+										gainStr = metricLabel + ": " + String.format("%,d", gain);
+									else
+										gainStr = metricLabel + ": " + formatXp(gain);
+									JLabel gainLabel = new JLabel(gainStr);
+									gainLabel.setForeground(new Color(150, 150, 150));
+									gainLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(11f));
+									row.add(gainLabel, BorderLayout.EAST);
+
+									clanContentPanel.add(row);
+									clanContentPanel.add(Box.createVerticalStrut(2));
+								}
+							}
+						}
+
+						clanContentPanel.revalidate();
+						clanContentPanel.repaint();
+					});
+				}
+			}
+			catch (Exception e)
+			{
+				log.warn("Failed to load clan data", e);
+			}
+		});
+	}
 
 	private void openInventoryDialog()
 	{

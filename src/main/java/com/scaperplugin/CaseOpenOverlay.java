@@ -22,6 +22,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 public class CaseOpenOverlay extends Overlay
@@ -72,6 +75,7 @@ public class CaseOpenOverlay extends Overlay
 
 	// Sounds
 	private AudioPlayer audioPlayer;
+	private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
 	// Click state
 	private boolean caseClicked = false;
@@ -327,10 +331,7 @@ public class CaseOpenOverlay extends Overlay
 			scrollOffset = 0;
 			animStartTime = System.currentTimeMillis();
 			state = State.ROULETTE_SPINNING;
-			new Thread(() -> {
-				try { Thread.sleep(300); } catch (InterruptedException ignored) {}
-				playSound("/ticking_sound.wav");
-			}).start();
+			scheduler.schedule(() -> playSound("/ticking_sound.wav"), 300, TimeUnit.MILLISECONDS);
 		}
 	}
 
