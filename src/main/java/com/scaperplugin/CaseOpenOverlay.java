@@ -110,6 +110,61 @@ public class CaseOpenOverlay extends Overlay
 		state = State.CASE_DISPLAY;
 	}
 
+	/**
+	 * Same as startCaseOpen, but skips the "Click to open" phase because the
+	 * server has already rolled the case. `openData` is the JSON returned by
+	 * `/api/cases/buy-and-open` (contains winner, winnerIndex, strip).
+	 */
+	public void startCaseOpenWithData(String caseId, String caseName, String caseImageUrl,
+	                                  String caseOpenImageUrl, JsonObject openData)
+	{
+		this.caseId = caseId;
+		this.caseName = caseName;
+		this.caseClicked = true;
+		this.strip.clear();
+		this.winner = null;
+
+		loadImageAsync(caseImageUrl, img -> this.caseImage = img);
+		loadImageAsync(caseOpenImageUrl, img -> this.caseOpenImage = img);
+
+		try
+		{
+			winnerIndex = openData.get("winnerIndex").getAsInt();
+			JsonObject winnerObj = openData.getAsJsonObject("winner");
+			winner = new StripItem(
+				winnerObj.get("id").getAsString(),
+				winnerObj.get("name").getAsString(),
+				winnerObj.get("rarity").getAsString(),
+				winnerObj.has("image") ? winnerObj.get("image").getAsString() : ""
+			);
+			winnerWear = winnerObj.has("wearHundredths") ? winnerObj.get("wearHundredths").getAsInt() : 0;
+
+			JsonArray stripArr = openData.getAsJsonArray("strip");
+			for (JsonElement el : stripArr)
+			{
+				JsonObject item = el.getAsJsonObject();
+				StripItem si = new StripItem(
+					item.get("id").getAsString(),
+					item.get("name").getAsString(),
+					item.get("rarity").getAsString(),
+					item.has("image") ? item.get("image").getAsString() : ""
+				);
+				strip.add(si);
+				loadImageAsync(si.imageUrl, img -> {});
+			}
+		}
+		catch (Exception ex)
+		{
+			log.error("startCaseOpenWithData parse error", ex);
+			state = State.HIDDEN;
+			return;
+		}
+
+		playSound("/case_open_sound.wav");
+		animStartTime = System.currentTimeMillis();
+		state = State.CASE_OPENING;
+	}
+
 	public void handleMouseClick(MouseEvent e)
 	{
 		if (state == State.HIDDEN) return;
@@ -304,7 +359,20 @@ public class CaseOpenOverlay extends Overlay
 
 	private void renderCaseOpening(Graphics2D g, int w, int h)
 	{
-		BufferedImage img = caseOpenImage != null ? caseOpenImage : caseImage;
+		long elapsed = System.currentTimeMillis() - animStartTime;
+
+		// Show closed case first, then swap to open partway through so the case visibly "opens".
+		final long CLOSED_PHASE_MS = 500;
+		BufferedImage img;
+		if (elapsed < CLOSED_PHASE_MS)
+		{
+			img = caseImage != null ? caseImage : caseOpenImage;
+		}
+		else
+		{
+			img = caseOpenImage != null ? caseOpenImage : caseImage;
+		}
+
 		int imgSize = Math.min(300, Math.min(w, h) / 2);
 		int x = (w - imgSize) / 2;
 		int y = (h - imgSize) / 2 - 30;
@@ -324,9 +392,8 @@ public class CaseOpenOverlay extends Overlay
 		fm = g.getFontMetrics();
 		g.drawString("Opening...", (w - fm.stringWidth("Opening...")) / 2, y + imgSize + 60);
 
-		// After 1 second, transition to roulette
-		long elapsed = System.currentTimeMillis() - animStartTime;
-		if (elapsed >= 1000)
+		// After the full opening phase, transition to roulette.
+		if (elapsed >= 1200)
 		{
 			scrollOffset = 0;
 			animStartTime = System.currentTimeMillis();

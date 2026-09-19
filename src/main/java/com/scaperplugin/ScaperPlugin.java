@@ -358,29 +358,50 @@ public class ScaperPlugin extends Plugin implements MouseListener
 
         // ── Case opening trigger (called from panel) ─────────────────────────────
 
+        public boolean isCaseOverlayActive()
+        {
+                return caseOpenOverlay != null && caseOpenOverlay.isActive();
+        }
+
         public void openCase(String caseId, String caseName, String caseImageUrl, String caseOpenImageUrl)
         {
                 if (caseOpenOverlay.isActive()) return;
                 caseOpenOverlay.startCaseOpen(caseId, caseName, caseImageUrl, caseOpenImageUrl);
         }
 
+        public void openCaseWithData(String caseId, String caseName, String caseImageUrl, String caseOpenImageUrl,
+                                     com.google.gson.JsonObject openData)
+        {
+                if (caseOpenOverlay.isActive()) return;
+                caseOpenOverlay.startCaseOpenWithData(caseId, caseName, caseImageUrl, caseOpenImageUrl, openData);
+        }
+
         // ── MouseListener implementation ─────────────────────────────────────────
+
+        // Debounce so one physical click can't accidentally advance two overlay stages.
+        private long lastOverlayClickMs = 0L;
+        private static final long OVERLAY_CLICK_DEBOUNCE_MS = 120L;
 
         @Override
         public MouseEvent mouseClicked(MouseEvent e)
         {
-                if (caseOpenOverlay.isActive())
-                {
-                        caseOpenOverlay.handleMouseClick(e);
-                        e.consume();
-                }
+                if (caseOpenOverlay.isActive()) e.consume();
                 return e;
         }
 
         @Override
         public MouseEvent mousePressed(MouseEvent e)
         {
-                if (caseOpenOverlay.isActive()) e.consume();
+                if (caseOpenOverlay.isActive())
+                {
+                        long now = System.currentTimeMillis();
+                        if (now - lastOverlayClickMs >= OVERLAY_CLICK_DEBOUNCE_MS)
+                        {
+                                lastOverlayClickMs = now;
+                                caseOpenOverlay.handleMouseClick(e);
+                        }
+                        e.consume();
+                }
                 return e;
         }
 

@@ -97,13 +97,31 @@ public class ScaperPanel extends PluginPanel
 		setLayout(new BorderLayout());
 		setBackground(DARK_BG);
 
-		// ── Title ──
+		// ── Header (title + single global token bar) ──
+		JPanel header = new JPanel();
+		header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
+		header.setBackground(DARK_BG);
+
 		JLabel title = new JLabel("Scaper");
 		title.setFont(FontManager.getRunescapeBoldFont().deriveFont(22f));
 		title.setForeground(Color.WHITE);
 		title.setHorizontalAlignment(SwingConstants.CENTER);
+		title.setAlignmentX(Component.CENTER_ALIGNMENT);
 		title.setBorder(new EmptyBorder(8, 0, 6, 0));
-		add(title, BorderLayout.NORTH);
+		header.add(title);
+
+		// Single token bar (shared across all tabs). Only one instance ever exists.
+		tokenValueLabel = new JLabel("0");
+		marketTokenValueLabel = tokenValueLabel; // alias so old update sites still work
+		JPanel globalTokenRow = buildTokenRow(tokenValueLabel);
+		JPanel tokenRowHolder = new JPanel(new BorderLayout());
+		tokenRowHolder.setBackground(DARK_BG);
+		tokenRowHolder.setBorder(new EmptyBorder(0, 8, 6, 8));
+		tokenRowHolder.add(globalTokenRow, BorderLayout.CENTER);
+		tokenRowHolder.setAlignmentX(Component.CENTER_ALIGNMENT);
+		header.add(tokenRowHolder);
+
+		add(header, BorderLayout.NORTH);
 
 		// ── Center wrapper (tabs + content + inventory btn) ──
 		JPanel center = new JPanel(new BorderLayout());
@@ -132,24 +150,6 @@ public class ScaperPanel extends PluginPanel
 		dashCard.setBackground(DARK_BG);
 		dashCard.setBorder(new EmptyBorder(10, 8, 8, 8));
 
-		// Token row
-		JPanel tokenRow = new JPanel(new BorderLayout());
-		tokenRow.setBackground(DARKER_BG);
-		tokenRow.setBorder(new EmptyBorder(8, 10, 8, 10));
-		tokenRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
-		tokenRow.setAlignmentX(Component.LEFT_ALIGNMENT);
-		JLabel tokenLabel = new JLabel("Tokens");
-		tokenLabel.setForeground(GOLD);
-		tokenLabel.setFont(FontManager.getRunescapeBoldFont().deriveFont(15f));
-		tokenRow.add(tokenLabel, BorderLayout.WEST);
-		tokenValueLabel = new JLabel("0");
-		tokenValueLabel.setForeground(Color.WHITE);
-		tokenValueLabel.setFont(FontManager.getRunescapeBoldFont().deriveFont(15f));
-		tokenValueLabel.setHorizontalAlignment(SwingConstants.RIGHT);
-		tokenRow.add(tokenValueLabel, BorderLayout.EAST);
-		dashCard.add(tokenRow);
-		dashCard.add(Box.createVerticalStrut(12));
-
 		JLabel tasksTitle = new JLabel("Daily Tasks");
 		tasksTitle.setForeground(GOLD);
 		tasksTitle.setFont(FontManager.getRunescapeBoldFont().deriveFont(16f));
@@ -163,7 +163,7 @@ public class ScaperPanel extends PluginPanel
 		tasksPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 		JLabel tasksLoading = new JLabel("Loading...");
 		tasksLoading.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		tasksLoading.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+		tasksLoading.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 		tasksPanel.add(tasksLoading);
 		dashCard.add(tasksPanel);
 
@@ -175,30 +175,12 @@ public class ScaperPanel extends PluginPanel
 		marketCard.setBackground(DARK_BG);
 		marketCard.setBorder(new EmptyBorder(10, 8, 8, 8));
 
-		// Market token row
-		JPanel mktTokenRow = new JPanel(new BorderLayout());
-		mktTokenRow.setBackground(DARKER_BG);
-		mktTokenRow.setBorder(new EmptyBorder(8, 10, 8, 10));
-		mktTokenRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
-		mktTokenRow.setAlignmentX(Component.LEFT_ALIGNMENT);
-		JLabel mktTokenLabel = new JLabel("Tokens");
-		mktTokenLabel.setForeground(GOLD);
-		mktTokenLabel.setFont(FontManager.getRunescapeBoldFont().deriveFont(15f));
-		mktTokenRow.add(mktTokenLabel, BorderLayout.WEST);
-		marketTokenValueLabel = new JLabel("0");
-		marketTokenValueLabel.setForeground(Color.WHITE);
-		marketTokenValueLabel.setFont(FontManager.getRunescapeBoldFont().deriveFont(15f));
-		marketTokenValueLabel.setHorizontalAlignment(SwingConstants.RIGHT);
-		mktTokenRow.add(marketTokenValueLabel, BorderLayout.EAST);
-		marketCard.add(mktTokenRow);
-		marketCard.add(Box.createVerticalStrut(10));
-
 		marketGrid = new JPanel(new GridLayout(0, 2, 6, 6));
 		marketGrid.setBackground(DARK_BG);
 		marketGrid.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
 		JLabel marketLoading = new JLabel("Loading cases...");
 		marketLoading.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		marketLoading.setFont(FontManager.getRunescapeSmallFont().deriveFont(14f));
+		marketLoading.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 		marketGrid.add(marketLoading);
 
 		JPanel marketGridWrap = new JPanel(new BorderLayout());
@@ -226,14 +208,14 @@ public class ScaperPanel extends PluginPanel
 		settingsDesc.setFocusable(false);
 		settingsDesc.setOpaque(false);
 		settingsDesc.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		settingsDesc.setFont(FontManager.getRunescapeSmallFont().deriveFont(14f));
+		settingsDesc.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 		settingsDesc.setAlignmentX(Component.LEFT_ALIGNMENT);
 		settingsDesc.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
 		settingsCard.add(settingsDesc);
 		settingsCard.add(Box.createVerticalStrut(8));
 
 		settingsStatus = new JLabel();
-		settingsStatus.setFont(FontManager.getRunescapeBoldFont().deriveFont(14f));
+		settingsStatus.setFont(FontManager.getRunescapeBoldFont().deriveFont(15f));
 		settingsStatus.setAlignmentX(Component.LEFT_ALIGNMENT);
 		settingsStatus.setVisible(false);
 		settingsCard.add(settingsStatus);
@@ -252,7 +234,7 @@ public class ScaperPanel extends PluginPanel
 		codePanel.add(codeLabel);
 		codePanel.add(Box.createVerticalStrut(4));
 		timerLabel = new JLabel();
-		timerLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(13f));
+		timerLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 		timerLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
 		timerLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 		codePanel.add(timerLabel);
@@ -290,7 +272,7 @@ public class ScaperPanel extends PluginPanel
 		clanContentPanel.setBorder(new EmptyBorder(12, 12, 8, 12));
 		JLabel clanLoading = new JLabel("Loading clan data...");
 		clanLoading.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		clanLoading.setFont(FontManager.getRunescapeSmallFont().deriveFont(14f));
+		clanLoading.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 		clanContentPanel.add(clanLoading);
 		JScrollPane clanScroll = new JScrollPane(clanContentPanel);
 		clanScroll.setBorder(null);
@@ -358,13 +340,47 @@ public class ScaperPanel extends PluginPanel
 	private JButton makeTabButton(String text)
 	{
 		JButton btn = new JButton(text);
-		btn.setFont(FontManager.getRunescapeSmallFont().deriveFont(14f));
+		btn.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 		btn.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
 		btn.setBackground(DARKER_BG);
 		btn.setFocusPainted(false);
 		btn.setBorder(new EmptyBorder(6, 2, 6, 2));
 		btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		return btn;
+	}
+
+	/** Build the Tokens row used identically by every tab that shows the balance. */
+	private JPanel buildTokenRow(JLabel valueLabel)
+	{
+		JPanel row = new JPanel(new BorderLayout());
+		row.setBackground(DARKER_BG);
+		row.setBorder(new EmptyBorder(8, 10, 8, 10));
+		// Fixed height, huge preferred width so BoxLayout always stretches to full panel width.
+		row.setPreferredSize(new Dimension(10_000, 40));
+		row.setMinimumSize(new Dimension(0, 40));
+		row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+		row.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+		JLabel label = new JLabel("Tokens");
+		label.setForeground(GOLD);
+		label.setFont(FontManager.getRunescapeBoldFont().deriveFont(15f));
+		label.setHorizontalAlignment(SwingConstants.LEFT);
+		row.add(label, BorderLayout.WEST);
+
+		valueLabel.setForeground(Color.WHITE);
+		valueLabel.setFont(FontManager.getRunescapeBoldFont().deriveFont(15f));
+		valueLabel.setHorizontalAlignment(SwingConstants.RIGHT);
+		row.add(valueLabel, BorderLayout.EAST);
+
+		// Wrap so BoxLayout always allocates the row identically regardless of siblings.
+		JPanel wrap = new JPanel(new BorderLayout());
+		wrap.setBackground(DARK_BG);
+		wrap.setPreferredSize(new Dimension(10_000, 40));
+		wrap.setMinimumSize(new Dimension(0, 40));
+		wrap.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+		wrap.setAlignmentX(Component.LEFT_ALIGNMENT);
+		wrap.add(row, BorderLayout.CENTER);
+		return wrap;
 	}
 
 	private void switchTab(String tab)
@@ -378,8 +394,35 @@ public class ScaperPanel extends PluginPanel
 		updateTabStyles();
 
 		if ("dashboard".equals(tab)) loadDashboard();
-		if ("market".equals(tab)) loadMarket();
-		if ("clan".equals(tab)) loadClan();
+		if ("market".equals(tab)) { refreshTokenBalance(); loadMarket(); }
+		if ("clan".equals(tab)) { refreshTokenBalance(); loadClan(); }
+	}
+
+	private void refreshTokenBalance()
+	{
+		String rsn = cachedRsn;
+		if (rsn == null) return;
+		CompletableFuture.runAsync(() ->
+		{
+			try
+			{
+				String url = buildUrl("/api/plugin/dashboard?rsn=" + URLEncoder.encode(rsn, "UTF-8"));
+				Request request = new Request.Builder().url(url).get().build();
+				try (Response response = httpClient.newCall(request).execute())
+				{
+					if (!response.isSuccessful()) return;
+					String body = response.body() != null ? response.body().string() : "";
+					JsonObject data = new JsonParser().parse(body).getAsJsonObject();
+					int tokens = data.has("tokens") ? data.get("tokens").getAsInt() : 0;
+					SwingUtilities.invokeLater(() ->
+					{
+						tokenValueLabel.setText(String.format("%,d", tokens));
+						marketTokenValueLabel.setText(String.format("%,d", tokens));
+					});
+				}
+			}
+			catch (Exception ignored) {}
+		});
 	}
 
 	private void updateTabStyles()
@@ -545,15 +588,15 @@ public class ScaperPanel extends PluginPanel
 						tasksPanel.removeAll();
 						if (!isLinked)
 						{
-							JLabel hint = new JLabel("<html><font color='#888'>Link your Discord account<br>in Settings to earn tokens.</font></html>");
-							hint.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+							JLabel hint = new JLabel("<html><font color='#bbbbbb'>Link your Discord account<br>in Settings to earn tokens.</font></html>");
+							hint.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 							tasksPanel.add(hint);
 						}
 						else if (tasks.size() == 0)
 						{
 							JLabel noTasks = new JLabel("No daily tasks available.");
 							noTasks.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-							noTasks.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+							noTasks.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 							tasksPanel.add(noTasks);
 						}
 						else
@@ -611,7 +654,6 @@ public class ScaperPanel extends PluginPanel
 									new LineBorder(claimed ? new Color(76, 175, 80, 60) : new Color(50, 50, 50), 1, true),
 									new EmptyBorder(8, 10, 8, 10)
 								));
-								card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 100));
 								card.setAlignmentX(Component.LEFT_ALIGNMENT);
 
 								// --- Top row: difficulty badge + task name ---
@@ -619,29 +661,30 @@ public class ScaperPanel extends PluginPanel
 								topRow.setBackground(card.getBackground());
 								topRow.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-								JLabel badge = new JLabel(" " + diffLabel + " ");
+								JLabel badge = new JLabel(diffLabel);
 								badge.setFont(FontManager.getRunescapeSmallFont().deriveFont(Font.BOLD, 10f));
 								badge.setForeground(diffColor);
 								badge.setBackground(diffBg);
 								badge.setOpaque(true);
 								badge.setBorder(BorderFactory.createCompoundBorder(
 									new LineBorder(new Color(diffColor.getRed(), diffColor.getGreen(), diffColor.getBlue(), 80), 1, true),
-									new EmptyBorder(1, 4, 1, 4)
+									new EmptyBorder(0, 2, 0, 2)
 								));
 
 								JLabel nameLabel = new JLabel(label);
-								nameLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(Font.BOLD, 14f));
+								nameLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(Font.BOLD, 16f));
 								nameLabel.setForeground(claimed ? new Color(76, 175, 80) : new Color(230, 230, 230));
+								nameLabel.setBorder(new EmptyBorder(0, 6, 0, 0));
 
-								JPanel badgeWrap = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+								JPanel badgeWrap = new JPanel(new BorderLayout(0, 0));
 								badgeWrap.setBackground(card.getBackground());
-								badgeWrap.add(badge);
-								badgeWrap.add(nameLabel);
+								badgeWrap.add(badge, BorderLayout.WEST);
+								badgeWrap.add(nameLabel, BorderLayout.CENTER);
 								topRow.add(badgeWrap, BorderLayout.CENTER);
 
 								// Token reward label on the right
 								JLabel tokenLabel = new JLabel("+" + taskTokens);
-								tokenLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(Font.BOLD, 12f));
+								tokenLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(Font.BOLD, 16f));
 								tokenLabel.setForeground(new Color(212, 160, 23));
 								topRow.add(tokenLabel, BorderLayout.EAST);
 
@@ -672,19 +715,19 @@ public class ScaperPanel extends PluginPanel
 								if (claimed) {
 									statusHtml = "<html><font color='#4caf50'><b>\u2713 Claimed!</b></font></html>";
 								} else if (!enrolled) {
-									statusHtml = "<html><font color='#888'>Waiting for snapshot...</font></html>";
+									statusHtml = "<html><font color='#bbbbbb'>Waiting for snapshot...</font></html>";
 								} else {
-									String pctColor = complete ? "#4caf50" : "#aaa";
-									statusHtml = "<html><font color='#ccc'>" + progressText + "</font> <font color='" + pctColor + "'>(" + pct + "%)</font></html>";
+									String pctColor = complete ? "#4caf50" : "#ffe289";
+									statusHtml = "<html><font color='#f5f1e8'>" + progressText + "</font> <font color='" + pctColor + "'>(" + pct + "%)</font></html>";
 								}
 								JLabel statusLabel = new JLabel(statusHtml);
-								statusLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(13f));
+								statusLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(17f));
 								bottomRow.add(statusLabel, BorderLayout.CENTER);
 
 								// Claim button
 								if (enrolled && complete && !claimed) {
 									JButton claimBtn = new JButton("Claim");
-									claimBtn.setFont(FontManager.getRunescapeSmallFont().deriveFont(Font.BOLD, 11f));
+									claimBtn.setFont(FontManager.getRunescapeSmallFont().deriveFont(Font.BOLD, 15f));
 									claimBtn.setForeground(new Color(20, 20, 20));
 									claimBtn.setBackground(new Color(212, 160, 23));
 									claimBtn.setFocusPainted(false);
@@ -737,7 +780,7 @@ public class ScaperPanel extends PluginPanel
 						{
 							JLabel empty = new JLabel("No cases available.");
 							empty.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-							empty.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+							empty.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 							marketGrid.add(empty);
 						}
 						else
@@ -775,14 +818,14 @@ public class ScaperPanel extends PluginPanel
 
 								JLabel nameLabel = new JLabel(name);
 								nameLabel.setForeground(Color.WHITE);
-								nameLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(13f));
+								nameLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 								nameLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 								nameLabel.setHorizontalAlignment(SwingConstants.CENTER);
 								card.add(nameLabel);
 
 								JLabel priceLabel = new JLabel(cost == 0 ? "Free" : String.format("%,d", cost));
 								priceLabel.setForeground(GOLD);
-								priceLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+								priceLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 								priceLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 								card.add(priceLabel);
 
@@ -818,6 +861,16 @@ public class ScaperPanel extends PluginPanel
 	{
 		String rsn = cachedRsn;
 		if (rsn == null) return;
+
+		// Block additional buys while a case reveal is still on screen — otherwise tokens
+		// get spent even though the overlay silently drops the second request.
+		if (plugin.isCaseOverlayActive())
+		{
+			JOptionPane.showMessageDialog(ScaperPanel.this,
+				"Close the current case reward first before opening another.",
+				"Scaper", JOptionPane.INFORMATION_MESSAGE);
+			return;
+		}
 
 		CompletableFuture.runAsync(() ->
 		{
@@ -860,11 +913,15 @@ public class ScaperPanel extends PluginPanel
 					if (data.has("balance"))
 					{
 						int balance = data.get("balance").getAsInt();
-						SwingUtilities.invokeLater(() -> tokenValueLabel.setText(String.format("%,d", balance)));
+						SwingUtilities.invokeLater(() ->
+						{
+							tokenValueLabel.setText(String.format("%,d", balance));
+							marketTokenValueLabel.setText(String.format("%,d", balance));
+						});
 					}
 
 					// Trigger overlay
-					SwingUtilities.invokeLater(() -> plugin.openCase(caseId, caseName, closedImg, openImg));
+					SwingUtilities.invokeLater(() -> plugin.openCaseWithData(caseId, caseName, closedImg, openImg, data));
 				}
 			}
 			catch (Exception e)
@@ -899,8 +956,8 @@ public class ScaperPanel extends PluginPanel
 
 						if (!data.has("clan") || data.get("clan").isJsonNull())
 						{
-							JLabel noClan = new JLabel("<html><font color='#aaa'>You are not in a clan,<br>or no clan data is available yet.</font></html>");
-							noClan.setFont(FontManager.getRunescapeSmallFont().deriveFont(14f));
+							JLabel noClan = new JLabel("<html><font color='#bbbbbb'>You are not in a clan,<br>or no clan data is available yet.</font></html>");
+							noClan.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 							clanContentPanel.add(noClan);
 							clanContentPanel.revalidate();
 							clanContentPanel.repaint();
@@ -926,7 +983,7 @@ public class ScaperPanel extends PluginPanel
 						if (!myRank.isEmpty()) meta += "  •  " + myRank;
 						JLabel metaLabel = new JLabel(meta);
 						metaLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-						metaLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+						metaLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 						metaLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 						clanContentPanel.add(metaLabel);
 						clanContentPanel.add(Box.createVerticalStrut(14));
@@ -934,7 +991,7 @@ public class ScaperPanel extends PluginPanel
 						// Events section
 						JLabel eventsTitle = new JLabel("EVENTS");
 						eventsTitle.setForeground(GOLD);
-						eventsTitle.setFont(FontManager.getRunescapeBoldFont().deriveFont(13f));
+						eventsTitle.setFont(FontManager.getRunescapeBoldFont().deriveFont(15f));
 						eventsTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
 						clanContentPanel.add(eventsTitle);
 						clanContentPanel.add(Box.createVerticalStrut(6));
@@ -944,7 +1001,7 @@ public class ScaperPanel extends PluginPanel
 						{
 							JLabel noEvents = new JLabel("No upcoming events");
 							noEvents.setForeground(new Color(120, 120, 120));
-							noEvents.setFont(FontManager.getRunescapeSmallFont().deriveFont(13f));
+							noEvents.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 							noEvents.setAlignmentX(Component.LEFT_ALIGNMENT);
 							clanContentPanel.add(noEvents);
 						}
@@ -972,7 +1029,7 @@ public class ScaperPanel extends PluginPanel
 
 								JLabel evName = new JLabel(title);
 								evName.setForeground(isActive ? GOLD : Color.WHITE);
-								evName.setFont(FontManager.getRunescapeBoldFont().deriveFont(13f));
+								evName.setFont(FontManager.getRunescapeBoldFont().deriveFont(15f));
 								evCard.add(evName);
 
 								String location = ev.has("location") && !ev.get("location").isJsonNull() ? ev.get("location").getAsString() : "";
@@ -980,7 +1037,7 @@ public class ScaperPanel extends PluginPanel
 								{
 									JLabel locLabel = new JLabel(location);
 									locLabel.setForeground(new Color(150, 150, 150));
-									locLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(11f));
+									locLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 									evCard.add(locLabel);
 								}
 
@@ -989,7 +1046,7 @@ public class ScaperPanel extends PluginPanel
 								{
 									JLabel descLabel = new JLabel("<html>" + desc.replace("\n", "<br>") + "</html>");
 									descLabel.setForeground(new Color(170, 170, 170));
-									descLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(11f));
+									descLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 									evCard.add(descLabel);
 								}
 
@@ -1003,7 +1060,7 @@ public class ScaperPanel extends PluginPanel
 								}
 								JLabel evTime = new JLabel(timeStr);
 								evTime.setForeground(isActive ? new Color(120, 200, 120) : ColorScheme.LIGHT_GRAY_COLOR);
-								evTime.setFont(FontManager.getRunescapeSmallFont().deriveFont(11f));
+								evTime.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 								evCard.add(evTime);
 
 								clanContentPanel.add(evCard);
@@ -1021,14 +1078,14 @@ public class ScaperPanel extends PluginPanel
 							clanContentPanel.add(Box.createVerticalStrut(14));
 							JLabel lbTitle = new JLabel(isActive ? "LEADERBOARD" : "UPCOMING EVENT");
 							lbTitle.setForeground(GOLD);
-							lbTitle.setFont(FontManager.getRunescapeBoldFont().deriveFont(13f));
+							lbTitle.setFont(FontManager.getRunescapeBoldFont().deriveFont(15f));
 							lbTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
 							clanContentPanel.add(lbTitle);
 							clanContentPanel.add(Box.createVerticalStrut(2));
 
 							JLabel feLabel = new JLabel(feTitle);
 							feLabel.setForeground(Color.WHITE);
-							feLabel.setFont(FontManager.getRunescapeBoldFont().deriveFont(14f));
+							feLabel.setFont(FontManager.getRunescapeBoldFont().deriveFont(15f));
 							feLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 							clanContentPanel.add(feLabel);
 
@@ -1039,7 +1096,7 @@ public class ScaperPanel extends PluginPanel
 								String key = tr.has("key") ? tr.get("key").getAsString() : "";
 								JLabel trLabel = new JLabel(metric + ": " + key);
 								trLabel.setForeground(new Color(150, 150, 150));
-								trLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(11f));
+								trLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 								trLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 								clanContentPanel.add(trLabel);
 							}
@@ -1051,7 +1108,7 @@ public class ScaperPanel extends PluginPanel
 							{
 								JLabel noData = new JLabel("No progress recorded yet.");
 								noData.setForeground(new Color(120, 120, 120));
-								noData.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+								noData.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 								noData.setAlignmentX(Component.LEFT_ALIGNMENT);
 								clanContentPanel.add(noData);
 							}
@@ -1082,13 +1139,13 @@ public class ScaperPanel extends PluginPanel
 
 									JLabel placeLabel = new JLabel(placeStr);
 									placeLabel.setForeground(placeColor);
-									placeLabel.setFont(FontManager.getRunescapeBoldFont().deriveFont(12f));
+									placeLabel.setFont(FontManager.getRunescapeBoldFont().deriveFont(15f));
 									placeLabel.setPreferredSize(new Dimension(30, 20));
 									row.add(placeLabel, BorderLayout.WEST);
 
 									JLabel nameL = new JLabel(pName);
 									nameL.setForeground(Color.WHITE);
-									nameL.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+									nameL.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 									row.add(nameL, BorderLayout.CENTER);
 
 									boolean eventEnded = fe.has("endsAtMs") && fe.get("endsAtMs").getAsLong() <= System.currentTimeMillis();
@@ -1099,7 +1156,7 @@ public class ScaperPanel extends PluginPanel
 										gainStr = metricLabel + ": " + formatXp(gain);
 									JLabel gainLabel = new JLabel(gainStr);
 									gainLabel.setForeground(new Color(150, 150, 150));
-									gainLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(11f));
+									gainLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 									row.add(gainLabel, BorderLayout.EAST);
 
 									clanContentPanel.add(row);
@@ -1182,7 +1239,7 @@ public class ScaperPanel extends PluginPanel
 		row1.setBackground(DARK_BG);
 		JLabel searchLbl = new JLabel("Search:");
 		searchLbl.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		searchLbl.setFont(FontManager.getRunescapeSmallFont().deriveFont(13f));
+		searchLbl.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 		row1.add(searchLbl);
 		JTextField searchField = new JTextField(8);
 		searchField.setBackground(DARKER_BG);
@@ -1193,7 +1250,7 @@ public class ScaperPanel extends PluginPanel
 
 		JLabel sortLbl = new JLabel("Sort:");
 		sortLbl.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		sortLbl.setFont(FontManager.getRunescapeSmallFont().deriveFont(13f));
+		sortLbl.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 		row1.add(sortLbl);
 		JComboBox<String> sortBox = new JComboBox<>(new String[]{"Default", "A-Z", "Z-A", "Wear (low)", "Wear (high)", "Rarity"});
 		sortBox.setBackground(DARKER_BG);
@@ -1202,7 +1259,7 @@ public class ScaperPanel extends PluginPanel
 
 		JLabel rarLbl = new JLabel("Rarity:");
 		rarLbl.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		rarLbl.setFont(FontManager.getRunescapeSmallFont().deriveFont(13f));
+		rarLbl.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 		row1.add(rarLbl);
 		JComboBox<String> rarBox = new JComboBox<>(new String[]{"All", "Common", "Uncommon", "Rare", "Epic", "Legendary"});
 		rarBox.setBackground(DARKER_BG);
@@ -1222,7 +1279,7 @@ public class ScaperPanel extends PluginPanel
 		{
 			rb.setBackground(DARK_BG);
 			rb.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-			rb.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+			rb.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 			row2.add(rb);
 		}
 		controls.add(row2);
@@ -1230,7 +1287,7 @@ public class ScaperPanel extends PluginPanel
 		// Row 3: Page info
 		JLabel pageLabel = new JLabel();
 		pageLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		pageLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+		pageLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 		pageLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 		controls.add(pageLabel);
 
@@ -1356,7 +1413,7 @@ public class ScaperPanel extends PluginPanel
 
 				JLabel nameLabel = new JLabel("<html><center>" + name + (qty > 1 ? " x" + qty : "") + "</center></html>");
 				nameLabel.setForeground(Color.WHITE);
-				nameLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+				nameLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 				nameLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 				nameLabel.setHorizontalAlignment(SwingConstants.CENTER);
 				tile.add(nameLabel);
@@ -1365,7 +1422,7 @@ public class ScaperPanel extends PluginPanel
 				{
 					JLabel wearLabel = new JLabel(String.format("%.2f", wearH / 100.0));
 					wearLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-					wearLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+					wearLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 					wearLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 					tile.add(wearLabel);
 				}
@@ -1374,7 +1431,7 @@ public class ScaperPanel extends PluginPanel
 				{
 					JLabel holoLabel = new JLabel("Holo");
 					holoLabel.setForeground(new Color(255, 215, 0));
-					holoLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(12f));
+					holoLabel.setFont(FontManager.getRunescapeSmallFont().deriveFont(15f));
 					holoLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 					tile.add(holoLabel);
 				}

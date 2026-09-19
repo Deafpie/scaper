@@ -33,16 +33,51 @@ tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
 
-// Test launcher — starts RuneLite with the plugin loaded for local testing
+// Launched by the Jagex Launcher via the RuneLiteDevWrapper.exe swap-in.
+// Wrapper invokes: gradlew launchRuneLite "-Prl.args=<jagex --jx_session_id, etc.>"
 task launchRuneLite(type: JavaExec) {
     group = 'runelite'
-    description = 'Launch RuneLite with the Scaper plugin loaded'
+    description = 'Launch RuneLite with the Scaper plugin, forwarding Jagex Launcher args'
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'com.scaperplugin.ScaperPluginTest'
-    jvmArgs = ['-ea']
-
-    // Forward Jagex Launcher arguments (passed via -Prl.args="...")
-    if (project.hasProperty('rl.args')) {
-        args project.property('rl.args').split(' ').toList()
+    standardInput = System.in
+    jvmArgs = [
+        '-ea',
+        '-Xmx1024m',
+        '-Xss2m',
+        '-XX:+UseG1GC',
+        '-Dawt.useSystemAAFontSettings=on',
+        '-Dswing.aatext=true',
+        '-Dsun.java2d.uiScale.enabled=false',
+        '-Dsun.java2d.d3d=false',
+        '-Dsun.java2d.noddraw=true',
+        '-Djna.nosys=true',
+    ]
+    doFirst {
+        def raw = project.hasProperty('rl.args') ? project.property('rl.args') : ''
+        if (raw?.trim()) {
+            args = raw.trim().split(/\s+/) as List
+        }
     }
+}
+
+// Launch RuneLite locally with this plugin sideloaded — use `./gradlew runClient`
+task runClient(type: JavaExec) {
+    group = 'runelite'
+    description = 'Launch RuneLite with the Scaper plugin loaded for testing'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.scaperplugin.ScaperPluginTest'
+    standardInput = System.in
+    jvmArgs = [
+        '-ea',
+        '-Xmx1024m',
+        '-Xss2m',
+        '-XX:+UseG1GC',
+        '-Dawt.useSystemAAFontSettings=on',
+        '-Dswing.aatext=true',
+        '-Dsun.java2d.uiScale.enabled=false',
+        '-Dsun.java2d.d3d=false',
+        '-Dsun.java2d.noddraw=true',
+        '-Djna.nosys=true',
+    ]
 }
