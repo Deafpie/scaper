@@ -95,6 +95,11 @@ public class ScaperTracker
 	// Outbound chat queue — messages from Discord to type into clan chat
 	private final Queue<String> outboundChatQueue = new LinkedList<>();
 
+	// Cursor so each plugin instance receives every message exactly once from
+	// the server's outbound queue. -1 means "first poll" — server returns no
+	// backfill and just hands back the current max id to seed the cursor.
+	private volatile long lastSeenOutboundId = -1L;
+
 	// Event queues — populated on client thread, drained on snapshot send
 	private final List<JsonObject> pendingBossKills = new ArrayList<>();
 	private final List<JsonObject> pendingClanChat = new ArrayList<>();
@@ -839,6 +844,7 @@ public class ScaperTracker
 		outboundPollCounter = 0;
 		cachedRsn = null;
 		cachedBossKc = null;
+		lastSeenOutboundId = -1L;
 		synchronized (pendingBossKills) { pendingBossKills.clear(); }
 		synchronized (pendingClanChat) { pendingClanChat.clear(); }
 		synchronized (pendingCollectionLog) { pendingCollectionLog.clear(); }
@@ -908,7 +914,8 @@ public class ScaperTracker
 			try
 			{
 				String url = API_URL
-					+ "/api/clan-chat/outbound?rsn=" + java.net.URLEncoder.encode(cachedRsn, "UTF-8");
+					+ "/api/clan-chat/outbound?rsn=" + java.net.URLEncoder.encode(cachedRsn, "UTF-8")
+					+ "&sinceId=" + lastSeenOutboundId;
 				Request request = new Request.Builder()
 					.url(url)
 					.get()
@@ -920,12 +927,20 @@ public class ScaperTracker
 					{
 						String body = response.body().string();
 						JsonElement parsed = new JsonParser().parse(body);
-						JsonArray arr = parsed.getAsJsonArray();
+						JsonObject root = parsed.getAsJsonObject();
+						JsonArray arr = root.has("messages") && root.get("messages").isJsonArray()
+							? root.getAsJsonArray("messages")
+							: new JsonArray();
+						long maxId = root.has("maxId") && !root.get("maxId").isJsonNull()
+							? root.get("maxId").getAsLong()
+							: lastSeenOutboundId;
 						for (int i = 0; i < arr.size(); i++)
 						{
 							JsonObject msg = arr.get(i).getAsJsonObject();
 							String user = msg.get("discordUser").getAsString();
 							String text = msg.get("message").getAsString();
+							long id = msg.has("id") && !msg.get("id").isJsonNull() ? msg.get("id").getAsLong() : -1L;
+							if (id > maxId) maxId = id;
 							// Plugin-local clan-chat style display (no programmatic chatbox typing).
 							String formatted = "[" + user + "]: " + text;
 							formatted = truncate(formatted, MAX_OUTBOUND_DISPLAY_LENGTH);
@@ -938,9 +953,11 @@ public class ScaperTracker
 								outboundChatQueue.add(formatted);
 							}
 						}
+						// Advance the cursor only forward.
+						if (maxId > lastSeenOutboundId) lastSeenOutboundId = maxId;
 						if (arr.size() > 0)
 						{
-							log.info("Queued {} outbound clan chat messages from Discord", arr.size());
+							log.info("Queued {} outbound clan chat messages from Discord (cursor={})", arr.size(), lastSeenOutboundId);
 						}
 					}
 				}
